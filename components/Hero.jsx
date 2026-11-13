@@ -76,8 +76,6 @@ export default function Hero({ onSearch, onNearMe }) {
         >
           {t.heroTitle1}{" "}
           <span className="text-gradient">{t.heroTitle2}</span>
-          <br />
-          {t.heroTitle3} 🇧🇩
         </motion.h1>
 
         <motion.p

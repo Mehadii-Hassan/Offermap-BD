@@ -3,7 +3,7 @@ import { AppProvider } from "@/lib/app-context";
 
 export const metadata = {
   title: {
-    default: "OfferMap BD — Discover Offers Near You in Dhaka",
+    default: "OfferMap BD — Discover Offers Near You",
     template: "%s | OfferMap BD",
   },
   description:
@@ -11,7 +11,7 @@ export const metadata = {
   keywords:
     "offers, discounts, deals, Dhaka, Bangladesh, BOGO, cashback, restaurant offers, fashion deals",
   openGraph: {
-    title: "OfferMap BD — Discover Offers Near You in Dhaka",
+    title: "OfferMap BD — Discover Offers Near You",
     description:
       "The fastest way to find discounts, deals and hot offers around your neighbourhood in Dhaka.",
     type: "website",
@@ -20,7 +20,7 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "OfferMap BD — Discover Offers Near You in Dhaka",
+    title: "OfferMap BD — Discover Offers Near You",
     description:
       "Find discounts, deals and hot offers around your neighbourhood in Dhaka.",
   },
