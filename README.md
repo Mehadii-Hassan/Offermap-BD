@@ -165,16 +165,16 @@ Division → District dropdowns cover all of Bangladesh (8 divisions, 64 distric
 
 `scripts/scrape.js` finds fresh offers from the web and **auto-publishes** them directly as `approved` (no manual review):
 - **Tavily** web search returns the top hits per query.
-- **Gemini** (`gemini-1.5-flash`) extracts structured offers (title, shop, discount, category, location, description).
-- **Nominatim** reverse-geocodes any coordinates and fills the address/area.
-- **Strict validation**: an offer is published **only** if `title`, `shop_name`, `discount_text`, a `valid_till` that is today or later, and valid `lat`/`lng` (inside Bangladesh) are all present. Anything missing these is **skipped** and listed in the report.
+- **Gemini** (`gemini-flash-lite-latest`) extracts structured offers (title, shop, category, division, district, address, discount, description, valid_till, payment, image, source). Gemini **never** provides coordinates — any `lat`/`lng` in its response is stripped.
+- **Location resolution** (Nominatim, max 1 req/sec, proper User-Agent, Bangladesh-bounds checked): first `<shop_name>, <address>, <district>, Bangladesh`; then just `<address>, <district>, Bangladesh`; then the **district center** from `/lib/bd-locations.js` with `(approximate location)` appended to the address. If the district is unknown, the offer is **skipped**.
+- **Strict validation**: an offer is published **only** if `title`, `shop_name`, `discount_text`, a `valid_till` that is today or later, and valid `lat`/`lng` (inside Bangladesh) are all present. The bounds check is kept as a final safety net but almost never skips now. Anything missing is **skipped** and listed in the report.
 - **`scrape_log`** table stores every processed `url`, so URLs already handled are skipped on later runs (unique constraint on `url` required).
 - Offers are **upserted** into Supabase by **`dedupe_key`** (unique constraint required) via `onConflict: 'dedupe_key'`, so re-runs don't create duplicates.
 - **Query rotation**: a query pool (English + Bengali, built programmatically from 13 categories × 30 locations = ~780 queries, shuffled with a fixed seed) **auto-advances daily** with no DB table and no required env — `dayNumber * MAX_QUERIES_PER_RUN % poolLength`, wrapping at the end. `SCRAPE_QUERY_START` is an optional manual override if set.
 - **Free-tier safety**: `MAX_QUERIES_PER_RUN` defaults to **30** (set `3` for a quick test), `MAX_PAGES_PER_RUN` defaults to **60** to cap Gemini calls, and a small delay runs between Gemini calls. If Gemini returns **429**, the script stops Gemini work for that run, saves what's already done, and prints a clear warning instead of crashing.
-- **Report** includes pool total, queries run today, days for a full rotation, Tavily searches used, and Gemini calls made.
+- **Report** includes pool total, queries run today, days for a full rotation, Tavily searches and Gemini calls used, offers found / inserted / skipped with per-reason breakdown, and how many used an exact location vs the district center. The console prints the first 5 offers.
 - **`SCRAPE_DRY_RUN=true`** writes nothing — it only builds the report.
-- A JSON report is written to `/tmp/scrape-report.json` (uploaded as a GitHub Actions artifact).
+- A JSON report is written to the OS temp dir (e.g. `%TEMP%\scrape-report.json` on Windows, `/tmp/scrape-report.json` on Linux; uploaded as a GitHub Actions artifact).
 
 Run locally:
 ```bash

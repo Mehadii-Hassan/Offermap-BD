@@ -16,7 +16,7 @@ import { tmpdir } from "os";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { createClient } from "@supabase/supabase-js";
-import { isInsideBangladesh } from "../lib/bd-locations.js";
+import { isInsideBangladesh, districtInfo } from "../lib/bd-locations.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -216,22 +216,26 @@ async function geminiExtract(query, results) {
   // Small delay so calls stay inside the free tier limit.
   if (GEMINI_DELAY_MS > 0) await sleep(GEMINI_DELAY_MS);
 
-  const prompt = `You are an offer intelligence agent for OfferMap BD, a platform listing deals and offers in Bangladesh (especially Dhaka).
+  const prompt = `You are an offer intelligence agent for OfferMap BD, a platform listing deals and offers in Bangladesh.
+Note: you must NEVER return coordinates (lat/lng). Location is resolved separately by our geocoder.
 
 Query: ${query}
 
 Web results:
 ${JSON.stringify(results, null, 2)}
 
-Extract at most 3 unique deals from these results. For each deal return a JSON object with:
+Extract at most 3 unique deals from these results. For each deal return a JSON object with ONLY these fields:
 - title: short offer title
 - shopName: business name
-- discountText: e.g. "30% OFF", "Buy 1 Get 1 Free"
 - category: one of Restaurant, Fashion & Clothing, Bank Card Offers, Electronics, Salon & Beauty, Grocery, Entertainment, Travel & Hotels, Mobile & Gadgets, Health, Education & Courses, Online Shopping, Mobile Wallet Cashback
-- area: a short area/neighbourhood in Bangladesh if known, else ""
+- division: division name in Bangladesh if known, else empty string
+- district: district name in Bangladesh if known, else empty string
+- address: street/area address if known, else empty string
+- discountText: e.g. "30% OFF", "Buy 1 Get 1 Free"
 - description: one or two sentence description
 - paymentMethod: Any or one of City Bank Card, bKash, Nagad, Rocket
 - validTill: an ISO date string (YYYY-MM-DD) in the future, or null
+- imageUrl: the best product/offer image url if available, else empty string
 - sourceUrl: the source url
 
 Return ONLY valid JSON (no markdown) as an array of objects. If nothing usable is found, return [].
@@ -241,12 +245,15 @@ JSON response format:
   {
     "title": "...",
     "shopName": "...",
-    "discountText": "...",
     "category": "...",
-    "area": "...",
+    "division": "...",
+    "district": "...",
+    "address": "...",
+    "discountText": "...",
     "description": "...",
     "paymentMethod": "...",
     "validTill": "...",
+    "imageUrl": "...",
     "sourceUrl": "..."
   }
 ]`;
@@ -276,48 +283,130 @@ JSON response format:
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-  const parsed = JSON.parse(cleaned || "[]");
-  return Array.isArray(parsed) ? parsed : [];
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned || "[]");
+  } catch (e) {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  // Gemini must never influence coordinates: drop any lat/lng key if present.
+  for (const o of parsed) {
+    if (o && typeof o === "object") {
+      delete o.lat;
+      delete o.lng;
+      delete o.latitude;
+      delete o.longitude;
+    }
+  }
+  return parsed;
 }
 
-async function nominatimReverse(lat, lng) {
+async function nominatimSearch(query) {
+  // Strictly max 1 request/second, with a proper User-Agent.
+  await sleep(1000);
+  const params = new URLSearchParams({
+    q: query,
+    format: "jsonv2",
+    countrycodes: "bd",
+    limit: "5",
+  });
   const res = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18`,
+    `https://nominatim.openstreetmap.org/search?${params}`,
     { headers: { "User-Agent": "OfferMapBD/1.0 (contact@offermap-bd.example.com)" } }
   );
-  if (!res.ok) return null;
+  if (!res.ok) return [];
   return res.json();
+}
+
+function firstInBounds(results) {
+  for (const r of results) {
+    const lat = Number(r.lat);
+    const lng = Number(r.lon);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && isInsideBangladesh(lat, lng)) {
+      return { lat, lng, displayName: r.display_name || "" };
+    }
+  }
+  return null;
+}
+
+// Resolve an offer's coordinates WITHOUT trusting Gemini.
+// Returns { lat, lng, displayName, area, addressApproximate, skip } or skip.
+async function resolveLocation(o) {
+  const district = String(o.district || "").trim();
+  const address = String(o.address || "").trim();
+  const shop = String(o.shopName || "").trim();
+
+  // (a) Nominatim: "<shop_name>, <address>, <district>, Bangladesh"
+  if (shop || address) {
+    const parts = [shop, address, district, "Bangladesh"].filter(Boolean);
+    const hit = firstInBounds(await nominatimSearch(parts.join(", ")));
+    if (hit) return { ...hit, addressApproximate: false };
+  }
+  // (b) Nominatim: "<address>, <district>, Bangladesh"
+  if (address) {
+    const parts = [address, district, "Bangladesh"].filter(Boolean);
+    const hit = firstInBounds(await nominatimSearch(parts.join(", ")));
+    if (hit) return { ...hit, addressApproximate: false };
+  }
+  // Skip if district is unknown or not in /lib/bd-locations.js.
+  const dInfo = district ? districtInfo(district) : null;
+  if (!dInfo) {
+    return { skip: "unknown district" };
+  }
+  // (c) Fallback to district center, flagged as approximate.
+  return {
+    lat: dInfo.lat,
+    lng: dInfo.lng,
+    displayName: "",
+    area: district,
+    division: dInfo.division,
+    addressApproximate: true,
+    districtBn: dInfo.bn,
+  };
 }
 
 async function scrapeQuery(query) {
   if (geminiRateLimited || geminiCalls >= MAX_PAGES_PER_RUN) {
-    return { offers: [], stopped: geminiRateLimited ? "rate_limited" : "budget_exhausted" };
+    return { offers: [], skipped: [], stopped: geminiRateLimited ? "rate_limited" : "budget_exhausted" };
   }
   const results = await tavilySearch(query);
   const rawOffers = await geminiExtract(query, results);
   const offers = [];
+  const skipped = [];
 
   for (const o of rawOffers) {
-    const lat = parseFloat(o.lat);
-    const lng = parseFloat(o.lng);
-    let finalArea = o.area || "";
-    let finalDisplayName = "";
-    if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
-      const geo = await nominatimReverse(lat, lng);
-      finalDisplayName = geo?.display_name || "";
-      finalArea = finalDisplayName.split(",").pop()?.trim() || o.area || "";
+    const loc = await resolveLocation(o);
+    if (loc.skip) {
+      skipped.push({
+        title: o.title,
+        shopName: o.shopName,
+        url: o.sourceUrl,
+        reason: loc.skip,
+      });
+      continue;
+    }
+    // Address text; mark approximate when we fell back to the district center.
+    let addressText = String(o.address || loc.displayName || "").trim();
+    if (loc.addressApproximate) {
+      if (addressText) addressText += " ";
+      addressText += "(approximate location)";
     }
     offers.push({
       ...o,
-      lat: Number.isNaN(lat) ? null : lat,
-      lng: Number.isNaN(lng) ? null : lng,
-      area: finalArea,
+      lat: loc.lat,
+      lng: loc.lng,
+      area: loc.area || o.district || loc.displayName || o.division || "",
+      division: o.division || loc.division || "",
+      district: o.district || "",
+      address: addressText,
+      displayName: loc.displayName || "",
+      addressApproximate: loc.addressApproximate,
       sourceUrl: o.sourceUrl || "",
       source: "scraper",
-      displayName: finalDisplayName,
     });
   }
-  return { offers, stopped: null };
+  return { offers, skipped, stopped: null };
 }
 
 async function urlIsProcessed(sourceUrl) {
@@ -347,6 +436,8 @@ async function logProcessedUrl(sourceUrl) {
 async function upsertOffers(offersToInsert) {
   const results = [];
   const skipped = [];
+  let exact = 0;
+  let districtCenter = 0;
 
   for (const o of offersToInsert) {
     const reason = invalidOfferReason(o);
@@ -379,14 +470,14 @@ async function upsertOffers(offersToInsert) {
       area: o.area,
       division: o.division || "",
       district: o.district || "",
-      address: o.displayName || o.area || "",
+      address: o.address || "",
       lat: Number(o.lat),
       lng: Number(o.lng),
       discount_text: String(o.discountText).trim(),
       description: o.description,
       valid_till: String(o.validTill).trim(),
       payment_method: o.paymentMethod,
-      image: null,
+      image: o.imageUrl || null,
       is_featured: false,
       hot_score: Math.floor(Math.random() * 50) + 40,
       status: "approved",
@@ -399,6 +490,8 @@ async function upsertOffers(offersToInsert) {
     };
 
     if (DRY_RUN) {
+      if (o.addressApproximate) districtCenter += 1;
+      else exact += 1;
       results.push({ ...row, status: "dry_run" });
       continue;
     }
@@ -412,10 +505,12 @@ async function upsertOffers(offersToInsert) {
       throw new Error(`Upsert failed: ${error.message}`);
     }
     await logProcessedUrl(o.sourceUrl);
+    if (o.addressApproximate) districtCenter += 1;
+    else exact += 1;
     results.push({ ...row, id: data?.id, status: "inserted" });
   }
 
-  return { results, skipped };
+  return { results, skipped, exact, districtCenter };
 }
 
 async function main() {
@@ -453,6 +548,14 @@ async function main() {
       geminiCalls: 0,
       geminiRateLimited: false,
     },
+    location: {
+      offersFound: 0,
+      offersInserted: 0,
+      skipped: 0,
+      skippedByReason: {},
+      exactLocation: 0,
+      districtCenter: 0,
+    },
     queriesRun: [],
     inserted: [],
     skipped: [],
@@ -474,15 +577,40 @@ async function main() {
     }
     console.log(`🔎 Query: ${q}`);
     try {
-      const { offers, stopped } = await scrapeQuery(q);
-      const { results, skipped } = await upsertOffers(offers);
+      const { offers, skipped, stopped } = await scrapeQuery(q);
+      const { results, skipped: skipped2, exact, districtCenter } = await upsertOffers(offers);
       const ok = results.filter((r) => r.status === "inserted");
       const dry = results.filter((r) => r.status === "dry_run");
-      report.queriesRun.push({ query: q, offersFound: offers.length, skipped: skipped.length });
-      if (skipped.length) report.skipped.push(...skipped);
+
+      report.queriesRun.push({
+        query: q,
+        offersFound: offers.length,
+        skipped: skipped.length + skipped2.length,
+      });
+      report.location.offersFound += offers.length;
+
+      // Location skips (unknown district).
+      for (const s of skipped) {
+        report.skipped.push(s);
+        report.location.skipped += 1;
+        report.location.skippedByReason[s.reason] = (report.location.skippedByReason[s.reason] || 0) + 1;
+      }
+      // Validation / duplicate skips from upsert.
+      for (const s of skipped2) {
+        report.skipped.push(s);
+        report.location.skipped += 1;
+        report.location.skippedByReason[s.reason] = (report.location.skippedByReason[s.reason] || 0) + 1;
+      }
+
+      // Count offers that made it through (inserted or would-insert in dry run).
+      const toInsert = ok.length ? ok : dry;
+      report.location.offersInserted += toInsert.length;
+      report.location.exactLocation += exact;
+      report.location.districtCenter += districtCenter;
+
       if (ok.length) report.inserted.push(...ok);
       if (dry.length) report.inserted.push(...dry);
-      console.log(`   → ${ok.length ? ok.length + " auto-published" : "0 published"} (${offers.length} found, ${skipped.length} skipped)`);
+      console.log(`   → ${ok.length ? ok.length + " auto-published" : "0 published"} (${offers.length} found, ${skipped.length + skipped2.length} skipped)`);
       if (stopped) {
         console.warn(`⏹ Query pool stopped (${stopped}).`);
         break;
@@ -500,9 +628,23 @@ async function main() {
   report.runStats.geminiRateLimited = geminiRateLimited;
 
   writeFileSync(REPORT_FILE, JSON.stringify(report, null, 2));
+
+  // Print the first 5 offers (dry-run "would-inserted" ones) to the console.
+  console.log("👇 First 5 offers:");
+  const firstFive = report.inserted.slice(0, 5);
+  if (!firstFive.length) {
+    console.log("   (none)");
+  }
+  for (const o of firstFive) {
+    console.log(
+      `   - ${o.title} · ${o.shop_name || o.shopName} · ${o.discount_text || o.discountText} · ` +
+      `${o.district || ""} · ${o.valid_till || o.validTill} · ${o.lat}, ${o.lng}`
+    );
+  }
+
   console.log(`✅ Report written to ${REPORT_FILE}`);
   console.log(
-    `✅ Done. Queries: ${report.runStats.queriesRun} · Tavily: ${tavilySearches} · Gemini: ${geminiCalls} · Auto-published: ${report.inserted.length} · Skipped: ${report.skipped.length}`
+    `✅ Done. Found: ${report.location.offersFound} · Inserted: ${report.location.offersInserted} · Skipped: ${report.location.skipped} · Tavily: ${tavilySearches} · Gemini: ${geminiCalls} · Exact: ${report.location.exactLocation} · District-center: ${report.location.districtCenter}`
   );
 }
 
