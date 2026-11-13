@@ -38,7 +38,8 @@ jobs:
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           CRON_SECRET=${{ secrets.CRON_SECRET }}
           SCRAPE_DRY_RUN=${{ inputs.dry_run == 'true' }}
-          SCRAPE_BATCH_SIZE=3
+          MAX_QUERIES_PER_RUN=30
+          MAX_PAGES_PER_RUN=60
           SCRAPE_RESULTS=5
           EOF
 

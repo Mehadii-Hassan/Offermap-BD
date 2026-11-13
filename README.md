@@ -170,7 +170,9 @@ Division → District dropdowns cover all of Bangladesh (8 divisions, 64 distric
 - **Strict validation**: an offer is published **only** if `title`, `shop_name`, `discount_text`, a `valid_till` that is today or later, and valid `lat`/`lng` (inside Bangladesh) are all present. Anything missing these is **skipped** and listed in the report.
 - **`scrape_log`** table stores every processed `url`, so URLs already handled are skipped on later runs (unique constraint on `url` required).
 - Offers are **upserted** into Supabase by **`dedupe_key`** (unique constraint required) via `onConflict: 'dedupe_key'`, so re-runs don't create duplicates.
-- **Query rotation**: a pool of queries (English + Bengali, covering all categories across Bangladesh-wide, the 8 divisions, and major districts) **auto-advances daily** with no DB table and no required env — `dayNumber * BATCH_SIZE % poolLength`. `SCRAPE_QUERY_START` is an optional manual override if set. The report shows pool size, today's start index, and how many days a full rotation takes.
+- **Query rotation**: a query pool (English + Bengali, built programmatically from 13 categories × 30 locations = ~780 queries, shuffled with a fixed seed) **auto-advances daily** with no DB table and no required env — `dayNumber * MAX_QUERIES_PER_RUN % poolLength`, wrapping at the end. `SCRAPE_QUERY_START` is an optional manual override if set.
+- **Free-tier safety**: `MAX_QUERIES_PER_RUN` defaults to **30** (set `3` for a quick test), `MAX_PAGES_PER_RUN` defaults to **60** to cap Gemini calls, and a small delay runs between Gemini calls. If Gemini returns **429**, the script stops Gemini work for that run, saves what's already done, and prints a clear warning instead of crashing.
+- **Report** includes pool total, queries run today, days for a full rotation, Tavily searches used, and Gemini calls made.
 - **`SCRAPE_DRY_RUN=true`** writes nothing — it only builds the report.
 - A JSON report is written to `/tmp/scrape-report.json` (uploaded as a GitHub Actions artifact).
 

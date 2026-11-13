@@ -2,11 +2,14 @@
 // geocoding -> Supabase upsert. Offers missing any required field (title,
 // shop_name, discount_text, valid_till today-or-later, valid lat/lng) are
 // SKIPPED. Valid offers are auto-published with status='approved'. Supports
-// DRY_RUN and query rotation with a stable report.
+// DRY_RUN and an auto-advancing query pool.
 //
 // Run: node scripts/scrape.js   (or SCRAPE_DRY_RUN=true node scripts/scrape.js)
 // Env vars: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY, TAVILY_API_KEY,
-//           GEMINI_API_KEY, SCRAPE_DRY_RUN.
+//           GEMINI_API_KEY, SCRAPE_DRY_RUN
+// Optional:  MAX_QUERIES_PER_RUN (default 30; 3 for a quick test),
+//            MAX_PAGES_PER_RUN (default 60, Gemini free-tier cap),
+//            SCRAPE_QUERY_START (manual pool-override), SCRAPE_RESULTS.
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
@@ -37,8 +40,13 @@ const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const DRY_RUN = process.env.SCRAPE_DRY_RUN === "true";
 const REPORT_FILE = "/tmp/scrape-report.json";
-const BATCH_SIZE = Number(process.env.SCRAPE_BATCH_SIZE || 3);
+// Real runs default to 30 queries; MAX_QUERIES_PER_RUN=3 is a quick test.
+const MAX_QUERIES_PER_RUN = Number(
+  process.env.MAX_QUERIES_PER_RUN || process.env.SCRAPE_BATCH_SIZE || 30
+);
+const MAX_PAGES_PER_RUN = Number(process.env.MAX_PAGES_PER_RUN || 60);
 const RESULTS_PER_QUERY = Number(process.env.SCRAPE_RESULTS || 5);
+const GEMINI_DELAY_MS = Number(process.env.SCRAPE_GEMINI_DELAY_MS || 1100);
 
 if (!url || !serviceKey) {
   console.error("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local");
@@ -57,44 +65,84 @@ const supabase = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Stable query rotation pool. Covers all offer categories across
-// Bangladesh-wide + the 8 divisions + major districts, in English and Bengali,
-// in a fixed (deliberately non-alphabetical) order so each day's batch mixes
-// different categories and places. Auto-advances daily (see main()).
-const QUERY_ROTATION = [
-  "restaurant table booking discount deals bangladesh",
-  "ঢাকায় রেস্টুরেন্ট খাবারের অফার ডিসকাউন্ট",
-  "fashion clothing bogo offer sale dhaka chattogram",
-  "শাড়ি পাঞ্জাবি ফ্যাশন ছাড় ডিসকাউন্ট বাংলাদেশ",
-  "credit card dining cashback offer bangladesh",
-  "ব্যাংক কার্ড কেনাকাটায় ক্যাশব্যাক অফার বাংলাদেশ",
-  "electronics smartphone tv installment offer dhaka",
-  "ঢাকায় ইলেকট্রনিক্স গেজেট ছাড় অফার দোকান",
-  "salon spa beauty package discount dhaka sylhet",
-  "সেলুন বিউটি প্যাকেজ ছাড় অফার বাংলাদেশ",
-  "grocery store kitchen essentials savings offer",
-  "মুদি দোকানে জরুরি পণ্য ছাড় সাশ্রয় অফার",
-  "movie theatre ticket offer entertainment bangladesh",
-  "বিনোদন সিনেমা টিকিট অফার ডিসকাউন্ট বাংলাদেশ",
-  "hotel resort staycation deal dhaka coxs bazar",
-  "ভ্রমণ হোটেল রিসোর্ট ছাড় অফার কক্সবাজার ঢাকা",
-  "mobile phone gadget deal offer bangladesh",
-  "মোবাইল ফোন গ্যাজেট দাম ছাড় অফার বাংলাদেশ",
-  "health clinic pharmacy discount offer khulna rajshahi",
-  "স্বাস্থ্য ক্লিনিক ফার্মেসি ছাড় অফার খুলনা রাজশাহী",
-  "online course coaching discount offer bangladesh",
-  "অনলাইন কোর্স প্রশিক্ষণ ছাড় অফার বাংলাদেশ",
-  "online shopping daily deals free delivery rangpur",
-  "অনলাইন কেনাকাটা দৈনিক ডিল ফ্রি ডেলিভারি রংপুর",
-  "bikash nagad mobile wallet cashback offer",
-  "বিকাশ নগদ মোবাইল ওয়ালেট ক্যাশব্যাক অফার",
-  "dining romantic dinner deal dhaka gulshan",
-  "চট্টগ্রাম গুলশান ডাইনিং ডিনার ডিল অফার",
-  "furniture home appliance offer mymensingh barishal",
-  "আসবাবপত্র গৃহস্থালি যন্ত্রাংশ ছাড় অফার ময়মনসিংহ বরিশাল",
-  "gym fitness membership discount offer bangladesh",
-  "জিম ফিটনেস সদস্যপদ ছাড় অফার বাংলাদেশ",
+// --- Query pool, built programmatically ---
+// Categories with an English keyword and a Bengali keyword.
+const CATEGORIES = [
+  { en: "restaurant", bn: "রেস্টুরেন্ট" },
+  { en: "fashion & clothing", bn: "ফ্যাশন পোশাক" },
+  { en: "electronics", bn: "ইলেকট্রনিক্স" },
+  { en: "salon & beauty", bn: "সেলুন বিউটি" },
+  { en: "grocery", bn: "মুদি" },
+  { en: "movies entertainment", bn: "সিনেমা বিনোদন" },
+  { en: "travel & hotels", bn: "ভ্রমণ হোটেল" },
+  { en: "mobile & gadgets", bn: "মোবাইল গ্যাজেট" },
+  { en: "health & fitness", bn: "স্বাস্থ্য ফিটনেস" },
+  { en: "education & courses", bn: "কোর্স শিক্ষা" },
+  { en: "online shopping", bn: "অনলাইন কেনাকাটা" },
+  { en: "bank card offers", bn: "ব্যাংক কার্ড অফার" },
+  { en: "bkash nagad cashback", bn: "বিকাশ নগদ ক্যাশব্যাক" },
 ];
+
+// Locations: Bangladesh-wide, the 8 divisions, and ~20 major districts/cities.
+const LOCATIONS = [
+  "Bangladesh", "Dhaka", "Chattogram", "Sylhet", "Khulna", "Rajshahi",
+  "Rangpur", "Mymensingh", "Barishal", "Cox's Bazar", "Gazipur",
+  "Narayanganj", "Cumilla", "Bogura", "Jashore", "Dinajpur", "Pabna",
+  "Tangail", "Feni", "Narsingdi", "Savar", "Uttara", "Gulshan", "Banani",
+  "Motijheel", "Mirpur", "Dhanmondi", "Kushtia", "Sirajganj", "Moulvibazar",
+];
+
+// A tiny deterministic PRNG so the shuffle is the same every run.
+function mulberry32(seed) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Build one query per category, with a mix of English and Bengali keywords.
+function buildQueries() {
+  const queries = [];
+  for (let c = 0; c < CATEGORIES.length; c++) {
+    const cat = CATEGORIES[c];
+    for (let l = 0; l < LOCATIONS.length; l++) {
+      const loc = LOCATIONS[l];
+      // English: "<category> offer discount <location>"
+      queries.push(`${cat.en} offer discount ${loc}`);
+      // Bengali: "<category> অফার ছাড় <location>"
+      queries.push(`${cat.bn} অফার ছাড় ${loc}`);
+    }
+  }
+  // Shuffle once with a FIXED seed so order is stable across runs.
+  const rand = mulberry32(20241107);
+  for (let i = queries.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    const tmp = queries[i];
+    queries[i] = queries[j];
+    queries[j] = tmp;
+  }
+  // De-duplicate (some English place names duplicate) and keep ordering.
+  const seen = new Set();
+  const uniq = [];
+  for (const q of queries) {
+    if (seen.has(q)) continue;
+    seen.add(q);
+    uniq.push(q);
+  }
+  return uniq;
+}
+
+const QUERY_ROTATION = buildQueries();
+
+// Free-tier safety counters.
+let tavilySearches = 0;
+let geminiCalls = 0;
+let geminiRateLimited = false;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function nowISO() {
   return new Date().toISOString();
@@ -129,6 +177,7 @@ function invalidOfferReason(o) {
 }
 
 async function tavilySearch(query) {
+  tavilySearches += 1;
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: {
@@ -160,6 +209,12 @@ async function tavilySearch(query) {
 }
 
 async function geminiExtract(query, results) {
+  if (geminiRateLimited || geminiCalls >= MAX_PAGES_PER_RUN) return [];
+
+  geminiCalls += 1;
+  // Small delay so calls stay inside the free tier limit.
+  if (GEMINI_DELAY_MS > 0) await sleep(GEMINI_DELAY_MS);
+
   const prompt = `You are an offer intelligence agent for OfferMap BD, a platform listing deals and offers in Bangladesh (especially Dhaka).
 
 Query: ${query}
@@ -208,6 +263,13 @@ JSON response format:
   );
   if (!res.ok) {
     const body = await res.text();
+    if (res.status === 429) {
+      geminiRateLimited = true;
+      console.warn(
+        `⚠️ Gemini rate limit (429). Stopping Gemini calls this run; ${geminiCalls - 1} calls already made.`
+      );
+      return [];
+    }
     throw new Error(`Gemini failed (${res.status}): ${body.slice(0, 300)}`);
   }
   const data = await res.json();
@@ -227,6 +289,9 @@ async function nominatimReverse(lat, lng) {
 }
 
 async function scrapeQuery(query) {
+  if (geminiRateLimited || geminiCalls >= MAX_PAGES_PER_RUN) {
+    return { offers: [], stopped: geminiRateLimited ? "rate_limited" : "budget_exhausted" };
+  }
   const results = await tavilySearch(query);
   const rawOffers = await geminiExtract(query, results);
   const offers = [];
@@ -251,7 +316,7 @@ async function scrapeQuery(query) {
       displayName: finalDisplayName,
     });
   }
-  return offers;
+  return { offers, stopped: null };
 }
 
 async function urlIsProcessed(sourceUrl) {
@@ -354,21 +419,21 @@ async function upsertOffers(offersToInsert) {
 
 async function main() {
   console.log(
-    `🚀 Scrape run started (mode: ${DRY_RUN ? "DRY_RUN" : "LIVE"}, batch: ${BATCH_SIZE})`
+    `🚀 Scrape run started (mode: ${DRY_RUN ? "DRY_RUN" : "LIVE"}, queries: ${MAX_QUERIES_PER_RUN})`
   );
 
   // Auto-advance the query pool daily, with no DB table and no required env.
   const dayNumber = Math.floor(Date.now() / 86400000);
   const poolLength = QUERY_ROTATION.length;
-  const autoStart = (dayNumber * BATCH_SIZE) % poolLength;
+  const autoStart = (dayNumber * MAX_QUERIES_PER_RUN) % poolLength;
   const poolStart = process.env.SCRAPE_QUERY_START !== undefined
     ? Number(process.env.SCRAPE_QUERY_START)
     : autoStart;
-  const rotationDays = Math.ceil(poolLength / BATCH_SIZE);
+  const rotationDays = Math.ceil(poolLength / MAX_QUERIES_PER_RUN);
 
-  // Take BATCH_SIZE queries from poolStart, wrapping around the end.
+  // Take MAX_QUERIES_PER_RUN queries from poolStart, wrapping around the end.
   const queries = [];
-  for (let i = 0; i < BATCH_SIZE; i++) {
+  for (let i = 0; i < MAX_QUERIES_PER_RUN; i++) {
     queries.push(QUERY_ROTATION[(poolStart + i) % poolLength]);
   }
 
@@ -378,8 +443,14 @@ async function main() {
     rotation: {
       poolTotal: poolLength,
       todayPoolStart: poolStart,
-      batchSize: BATCH_SIZE,
+      queriesPerRun: MAX_QUERIES_PER_RUN,
       daysPerFullRotation: rotationDays,
+    },
+    runStats: {
+      queriesRun: 0,
+      tavilySearches: 0,
+      geminiCalls: 0,
+      geminiRateLimited: false,
     },
     queriesRun: [],
     inserted: [],
@@ -390,13 +461,19 @@ async function main() {
   };
 
   console.log(
-    `🧮 Query pool: ${poolLength} total · today's start: ${poolStart} · full rotation: ${rotationDays} day(s), ${BATCH_SIZE} per run`
+    `🧮 Query pool: ${poolLength} total · today's start: ${poolStart} · full rotation: ${rotationDays} day(s), ${MAX_QUERIES_PER_RUN} per run`
   );
 
   for (const q of queries) {
+    if (geminiRateLimited || geminiCalls >= MAX_PAGES_PER_RUN) {
+      console.warn(
+        `⏹ Stopping early: Gemini budget/rate-limit reached (${geminiCalls}/${MAX_PAGES_PER_RUN} calls).`
+      );
+      break;
+    }
     console.log(`🔎 Query: ${q}`);
     try {
-      const offers = await scrapeQuery(q);
+      const { offers, stopped } = await scrapeQuery(q);
       const { results, skipped } = await upsertOffers(offers);
       const ok = results.filter((r) => r.status === "inserted");
       const dry = results.filter((r) => r.status === "dry_run");
@@ -405,6 +482,10 @@ async function main() {
       if (ok.length) report.inserted.push(...ok);
       if (dry.length) report.inserted.push(...dry);
       console.log(`   → ${ok.length ? ok.length + " auto-published" : "0 published"} (${offers.length} found, ${skipped.length} skipped)`);
+      if (stopped) {
+        console.warn(`⏹ Query pool stopped (${stopped}).`);
+        break;
+      }
     } catch (err) {
       console.error(`❌ Query failed: ${q}`, err.message);
       report.failed.push({ query: q, error: err.message });
@@ -412,10 +493,15 @@ async function main() {
     }
   }
 
+  report.runStats.queriesRun = report.queriesRun.length;
+  report.runStats.tavilySearches = tavilySearches;
+  report.runStats.geminiCalls = geminiCalls;
+  report.runStats.geminiRateLimited = geminiRateLimited;
+
   writeFileSync(REPORT_FILE, JSON.stringify(report, null, 2));
   console.log(`✅ Report written to ${REPORT_FILE}`);
   console.log(
-    `✅ Done. Auto-published: ${report.inserted.length}, Skipped: ${report.skipped.length}, Failed: ${report.failed.length}`
+    `✅ Done. Queries: ${report.runStats.queriesRun} · Tavily: ${tavilySearches} · Gemini: ${geminiCalls} · Auto-published: ${report.inserted.length} · Skipped: ${report.skipped.length}`
   );
 }
 
