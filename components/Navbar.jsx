@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Heart, MapPin, Sun, Moon, Home as HomeIcon, Map as MapIcon, Info } from "lucide-react";
+import { Heart, MapPin, Sun, Moon, Plus, Home as HomeIcon, Map as MapIcon, Info } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { motion } from "framer-motion";
 
@@ -66,6 +66,12 @@ export default function Navbar() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            <Link
+              href="/add"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-tr from-accent-orange to-accent-pink px-4 py-2 text-sm font-bold text-white shadow-lg shadow-accent-pink/30 hover:opacity-90 transition"
+            >
+              <Plus size={16} /> {t.addOffer}
+            </Link>
             <button
               onClick={toggleLang}
               className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 transition"

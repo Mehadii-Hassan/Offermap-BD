@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { Search, LocateFixed, MapPin, ChevronDown } from "lucide-react";
+import { Search, LocateFixed, MapPin, ChevronDown, Plus } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { AREAS } from "@/lib/offers";
 
@@ -119,6 +120,7 @@ export default function Hero({ onSearch, onNearMe }) {
           transition={{ duration: 0.5, delay: 0.3 }}
           className="mx-auto mt-4 flex flex-col items-center gap-3"
         >
+          <div className="flex flex-wrap items-center justify-center gap-3">
           <button
             onClick={handleNearMe}
             disabled={locating}
@@ -127,6 +129,14 @@ export default function Hero({ onSearch, onNearMe }) {
             <LocateFixed size={17} className={locating ? "animate-spin" : ""} />
             {locating ? "…" : `📍 ${t.nearMe}`}
           </button>
+
+          <Link
+            href="/add"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-tr from-accent-orange to-accent-pink px-5 py-3 text-sm font-bold text-white shadow-lg shadow-accent-pink/30 hover:opacity-90 transition active:scale-95"
+          >
+            <Plus size={17} strokeWidth={3} /> {t.addOffer}
+          </Link>
+          </div>
 
           {status === "success" && (
             <motion.p

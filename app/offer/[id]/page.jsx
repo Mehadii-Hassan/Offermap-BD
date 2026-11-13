@@ -1,15 +1,19 @@
 import { notFound } from "next/navigation";
 import PageShell from "@/components/PageShell";
 import OfferDetailClient from "@/components/OfferDetailClient";
-import { getAllOffers, getOfferById } from "@/lib/offers";
+import { getOfferById } from "@/lib/offers";
 import { pageMeta } from "@/lib/meta";
 
-export function generateStaticParams() {
-  return getAllOffers().map((o) => ({ id: String(o.id) }));
-}
+// Fetch the latest data for every visit so newly approved offers appear.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }) {
-  const offer = getOfferById(params.id);
+  let offer = null;
+  try {
+    offer = await getOfferById(params.id);
+  } catch (e) {
+    console.error(e);
+  }
   if (!offer) return pageMeta({ title: "Offer Not Found", description: "This offer could not be found." });
   return pageMeta({
     title: `${offer.title} at ${offer.shopName}`,
@@ -19,8 +23,13 @@ export async function generateMetadata({ params }) {
   });
 }
 
-export default function OfferPage({ params }) {
-  const offer = getOfferById(params.id);
+export default async function OfferPage({ params }) {
+  let offer = null;
+  try {
+    offer = await getOfferById(params.id);
+  } catch (e) {
+    console.error(e);
+  }
   if (!offer) notFound();
 
   return (

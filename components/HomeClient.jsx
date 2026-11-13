@@ -16,27 +16,14 @@ import AdSlot from "./AdSlot";
 import { useApp } from "@/lib/app-context";
 import {
   getAllOffers,
-  getHotOffers,
-  getEndingSoon,
-  getTodayTopFive,
-  getNearbyOffers,
   distanceToOffer,
   discountValue,
 } from "@/lib/offers";
 
-const TOP_AREAS = [
-  { name: "Dhanmondi", lat: 23.7461, lng: 90.3762 },
-  { name: "Gulshan", lat: 23.7925, lng: 90.4064 },
-  { name: "Banani", lat: 23.7937, lng: 90.4066 },
-  { name: "Uttara", lat: 23.8759, lng: 90.3795 },
-  { name: "Mirpur", lat: 23.8101, lng: 90.3559 },
-  { name: "Mohammadpur", lat: 23.7657, lng: 90.3567 },
-  { name: "Old Dhaka", lat: 23.7100, lng: 90.4100 },
-];
-
 export default function HomeClient() {
   const { t } = useApp();
   const [loading, setLoading] = useState(true);
+  const [allOffers, setAllOffers] = useState([]);
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [view, setView] = useState("list");
@@ -51,25 +38,37 @@ export default function HomeClient() {
     sort: "nearest",
   });
 
-  // simulate a short loading to showcase skeletons
+  // Load approved offers from Supabase (via lib/offers.js) once.
   useEffect(() => {
-    const id = setTimeout(() => setLoading(false), 700);
-    return () => clearTimeout(id);
+    let active = true;
+    getAllOffers()
+      .then((offers) => {
+        if (!active) return;
+        setAllOffers(offers);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const searchRes = useMemo(() => {
     if (!query.trim()) return null;
     const norm = query.trim().toLowerCase();
-    return getAllOffers().filter(
+    return allOffers.filter(
       (o) =>
         o.title.toLowerCase().includes(norm) ||
         o.shopName.toLowerCase().includes(norm) ||
         o.category.toLowerCase().includes(norm) ||
         o.area.toLowerCase().includes(norm)
     );
-  }, [query]);
+  }, [query, allOffers]);
 
-  const baseList = searchRes != null ? searchRes : getAllOffers();
+  const baseList = searchRes != null ? searchRes : allOffers;
 
   const filteredList = useMemo(() => {
     let list = baseList;
@@ -105,15 +104,40 @@ export default function HomeClient() {
     return withDist;
   }, [baseList, filters, userCoords]);
 
-  const hot = getHotOffers(8);
-  const ending = getEndingSoon(8);
-  const topFive = getTodayTopFive();
-  const featured = getAllOffers().filter((o) => o.isFeatured).slice(0, 3);
+  // Derive the curated sections from the single fetched list.
+  const hot = useMemo(
+    () => [...allOffers].sort((a, b) => b.hotScore - a.hotScore).slice(0, 8),
+    [allOffers]
+  );
+  const ending = useMemo(
+    () =>
+      [...allOffers]
+        .sort((a, b) => new Date(a.validTill) - new Date(b.validTill))
+        .slice(0, 8),
+    [allOffers]
+  );
+  const topFive = useMemo(
+    () =>
+      [...allOffers]
+        .sort((a, b) => (b.viewsToday ?? 0) - (a.viewsToday ?? 0))
+        .slice(0, 5),
+    [allOffers]
+  );
+  const featured = useMemo(
+    () => allOffers.filter((o) => o.isFeatured).slice(0, 3),
+    [allOffers]
+  );
 
   const nearOffers = useMemo(() => {
     if (!userCoords) return [];
-    return getNearbyOffers(userCoords.lat, userCoords.lng, 8);
-  }, [userCoords]);
+    return [...allOffers]
+      .map((o) => ({
+        ...o,
+        distanceKm: distanceToOffer(o, userCoords.lat, userCoords.lng),
+      }))
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 8);
+  }, [userCoords, allOffers]);
 
   function handleNearMe(coords) {
     setUserCoords(coords);

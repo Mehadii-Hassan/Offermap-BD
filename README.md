@@ -2,124 +2,152 @@
 
 Discover discounts, deals and hot offers **near your location** in Dhaka. Mobile-first, vibrant, dark/light themed, and free to use.
 
-**Phase 1** is complete: a full local-data prototype with 30 realistic offers across 7 Dhaka areas, ready for future ad integration and a real database.
+**Phase 1** delivered the full UI (hero search, Near Me, filters, list/map, saved, English/বাংলা, dark/light).
+**Phase 2** moved all data to **Supabase**, added a public offer submission form (`/add`), and a mobile-friendly **admin approval panel** (`/admin`).
 
 ## ✨ Features
 
 - **Hero + search** with a `📍 Near Me` button (browser geolocation) that falls back to an area dropdown when denied.
-- **Category chips** with animated active state across 7 categories.
-- **🔥 Hot Right Now**, **⏰ Ending Soon** (live countdown timers), **📍 Near You** (sorted by distance), and a **Today's Top 5** strip.
-- **Featured** offers with a glowing badge, listed first.
-- **Filters**: category, area, payment method (Any / City Bank Card / bKash), and sort (nearest / ending soon / highest discount).
-- **List ⇄ Map toggle**: Leaflet + OpenStreetMap map with custom pins; clicking a pin shows a mini offer card.
-- **Offer details**: countdown, payment, description, Get Directions (Google Maps link), WhatsApp + Messenger share, and **Worked ✅ / Didn't work ❌** vote buttons (saved to localStorage with counts).
-- **Saved page**: heart-save offers to localStorage; **confetti** fires on your first save.
-- **English / বাংলা** language toggle for all main UI text.
-- **Dark / light** theme toggle with glassmorphism, gradient blobs, hover glow.
-- **SEO**: per-page metadata, Open Graph tags, `sitemap.xml`, `robots.txt`, semantic HTML.
-- **Ad slots**: a clearly-commented `<AdSlot />` placeholder between sections, ready for Google AdSense (no real ad code yet).
+- **Category chips**, **🔥 Hot Right Now**, **⏰ Ending Soon** (live countdown), **📍 Near You**, **Today's Top 5**, and **Featured** badges.
+- **Filters**: category, area, payment method, sort (nearest / ending soon / highest discount).
+- **List ⇄ Map toggle** (Leaflet + OpenStreetMap).
+- **Offer details**: countdown, payment, directions, WhatsApp/Messenger share, and **Worked ✅ / Didn't work ❌** — counts live in Supabase, guarded per-browser via localStorage.
+- **Saved page** with heart-save + confetti.
+- **Add Offer (`/add`)**: public submission form with honeypot + rate limit (max 5/IP/hour). Photos upload to the `offer-images` bucket; lat/lng auto-filled from area centers. New offers are stored as `pending`.
+- **Admin (`/admin`)**: password login (httpOnly cookie), tabs for Pending / Approved / Rejected, Approve / Reject / Delete / Toggle-Featured / inline-Edit — mobile friendly. `noindex` + `Disallow: /admin`.
+- **English / বাংলা** toggle, **dark/light** toggle, glassmorphism, gradient blobs, glow hover.
+- **SEO**: per-page metadata, Open Graph, Supabase-driven `sitemap.xml`, `robots.txt`.
+- **Ad slots**: `<AdSlot />` placeholder ready for Google AdSense.
 
 ## ▶️ How to run
 
-```bash
-# 1. Install dependencies
-npm install
+1. **Set up Supabase**
+   - Create a Supabase project.
+   - Create the `offers` table with these columns:
+     `id (uuid, default gen_random_uuid()), title, shop_name, category, area, lat, lng, discount_text, description, valid_till (date), payment_method, image, is_featured (bool), hot_score (int), status (text: 'pending'/'approved'/'rejected'), worked_count (int), not_worked_count (int), created_at (timestamptz, default now())`.
+   - Create a public storage bucket named `offer-images`.
+   - Enable RLS: allow public **read** only where `status = 'approved'`. Grant the anon role select on `offers`.
 
-# 2. Start the dev server
-npm run dev
-```
+2. **Configure env** — create `.env.local` in the project root:
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key   # server-side only, never exposed
+   ADMIN_PASSWORD=your-admin-password
+   ```
+   > `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_PASSWORD` are used **only** in server-side code and API routes. They never reach the browser. `.env.local` is git-ignored.
 
-Open [http://localhost:3000](http://localhost:3000).
+3. **Install & seed the database**
+   ```bash
+   npm install
+   npm run seed      # inserts the 30 sample offers from data/offers.json as 'approved'
+   ```
 
-For a production build:
+4. **Run**
+   ```bash
+   npm run dev       # http://localhost:3000
+   # or production:
+   npm run build && npm run start
+   ```
 
-```bash
-npm run build
-npm run start
-```
+## 🗄 How the data layer works
+
+All data access lives in **`lib/offers.js`** (the single place that reads offers).
+- It reads from Supabase via `lib/supabase.js`, which exposes a **public client** (`supabase`, anon key, RLS-restricted to approved + valid) and an **admin client** (`supabaseAdmin`, service role key, server-side only).
+- The public API only returns offers with `status = 'approved'` and `valid_till >= today`.
+- Supabase rows (snake_case) are mapped to the camelCase shapes the existing UI already uses.
 
 ## 📁 Folder structure
 
 ```
 offermap-bd/
-├─ app/                    # Next.js App Router pages
-│  ├─ layout.jsx           # Root layout, fonts, metadata
-│  ├─ page.jsx             # Home (/)
-│  ├─ globals.css          # Tailwind + theme styles
-│  ├─ sitemap.js           # Auto-generated sitemap
-│  ├─ robots.js            # robots.txt
-│  ├─ icon.svg             # App icon (favicon)
-│  ├─ not-found.jsx        # Custom 404
-│  ├─ about/               # About page
-│  ├─ privacy/             # Privacy Policy
-│  ├─ contact/             # Contact page
-│  ├─ saved/               # Saved offers (/saved)
-│  └─ offer/[id]/page.jsx  # Offer detail (/offer/1)
-├─ components/             # Reusable UI components
-│  ├─ Navbar.jsx, Footer.jsx, BottomNav.jsx, PageShell.jsx
-│  ├─ Hero.jsx, CategoryChips.jsx, FilterBar.jsx, SectionHeading.jsx
-│  ├─ OfferCard.jsx, MapView.jsx, Countdown.jsx
-│  ├─ Skeletons.jsx, EmptyState.jsx, Confetti.jsx
-│  ├─ OfferDetailClient.jsx, SavedClient.jsx, HomeClient.jsx
-│  └─ AdSlot.jsx           # Placeholder for future ads
+├─ app/                         # Next.js App Router
+│  ├─ page.jsx                  # Home (/)
+│  ├─ add/page.jsx              # Public offer submission (/add) — "Offer Add Koro"
+│  ├─ admin/page.jsx            # Admin panel (/admin)
+│  ├─ offer/[id]/page.jsx       # Offer detail (/offer/:id) — dynamic, loads from Supabase
+│  ├─ saved/, about/, privacy/, contact/, not-found.jsx
+│  ├─ api/
+│  │  ├─ submit/route.js        # POST — validate, upload photo, insert as pending
+│  │  ├─ vote/route.js          # POST — increment worked_count / not_worked_count
+│  │  └─ admin/
+│  │     ├─ login/route.js      # POST login (httpOnly cookie), DELETE logout
+│  │     ├─ offers/route.js     # GET list (cookie-protected)
+│  │     └─ offers/[id]/route.js# PATCH approve/reject/feature/edit, DELETE
+│  ├─ sitemap.js                # Offer URLs from Supabase
+│  └─ robots.js                 # Disallows /admin and /api/
+├─ components/
+│  ├─ HomeClient, OfferCard, MapView (leaflet dynamic import), Countdown,
+│  │  Hero, CategoryChips, FilterBar, SectionHeading, Skeletons, EmptyState,
+│  │  Confetti, Navbar, Footer, BottomNav, PageShell
+│  ├─ AddOfferClient.jsx        # /add form + thank-you screen
+│  └─ AdminClient.jsx           # login + tabs + actions
 ├─ data/
-│  └─ offers.json          # ✅ All offer data lives here (Phase 1)
-├─ lib/                    # Logic + data access
-│  ├─ offers.js            # ⭐ ONE place that reads offer data
-│  ├─ app-context.jsx      # Theme + language provider
-│  ├─ text.js              # English / বাংলা translations
-│  ├─ storage.js           # localStorage helpers (saved/votes)
-│  └─ meta.js              # Metadata helper
-├─ public/manifest.webmanifest
-├─ next.config.js          # Next.js config
-├─ postcss.config.js        # PostCSS config
-├─ tailwind.config.js       # Tailwind theme
+│  └─ offers.json               # Backup of the 30 sample offers (seeded via npm run seed)
+├─ scripts/
+│  └─ seed.js                   # Reads offers.json → inserts as approved
+├─ lib/
+│  ├─ offers.js                 # ⭐ ONLY place that reads offer data
+│  ├─ supabase.js               # public + admin clients, row mapping
+│  ├─ admin-auth.js             # httpOnly cookie verification
+│  ├─ rate-limit.js             # in-memory rate limiting + honeypot helper
+│  ├─ app-context.jsx           # theme + language provider
+│  ├─ text.js                   # English / বাংলা translations
+│  ├─ storage.js                # localStorage (saved, voted)
+│  └─ meta.js                   # metadata helper
+├─ .env.local                   # 👈 your secrets (git-ignored)
 └─ package.json
 ```
 
-## ➕ How to add a new offer
+## ➕ Adding an offer
 
-Add a new object to the array in **`data/offers.json`** using a unique `id`:
+**Public route (recommended):** visit `/add`, fill the form, and it lands as `pending` in Supabase. Approve it in `/admin` and it appears immediately on the home page.
+
+**Seed/backup route:** add an object to `data/offers.json` then run `npm run seed`. Fields:
 
 ```jsonc
 {
-  "id": "31",                       // unique number as a string
-  "title": "Buy 1 Get 1 on Coffee", // headline shown on the card
-  "shopName": "Brew & Bean",        // shop/brand name
-  "category": "Restaurant",          // one of the 7 categories
-  "area": "Dhanmondi",               // one of the 7 areas
-  "lat": 23.7461,                   // decimal latitude
-  "lng": 90.3762,                   // decimal longitude
-  "discountText": "BOGO FREE",       // e.g. "30% OFF", "৳200 OFF"
+  "title": "Buy 1 Get 1 on Coffee",
+  "shopName": "Brew & Bean",
+  "category": "Restaurant",          // one of 7 categories
+  "area": "Dhanmondi",               // one of 7 Dhaka areas
+  "lat": 23.7461, "lng": 90.3762,    // auto-filled on /add from area
+  "discountText": "BOGO FREE",
   "description": "Get a second coffee free with any large cup.",
-  "validTill": "2026-12-31",         // ISO date — countdown auto-computes
+  "validTill": "2026-12-31",
   "paymentMethod": "Any",            // "Any" | "City Bank Card" | "bKash"
-  "isFeatured": false,               // true adds a glowing Featured badge
-  "hotScore": 60,                    // 0–100, drives "Hot Right Now"
-  "viewsToday": 125,                 // displayed as "🔥 X people viewed today"
-  "image": "https://images.unsplash.com/..." // an image URL
+  "isFeatured": false,
+  "hotScore": 60,
+  "image": "https://images.unsplash.com/..."
 }
 ```
 
-That&apos;s it. The home page, filters, map, search and detail page all update automatically — the ONLY place that reads offer data is **`lib/offers.js`**, so later you can swap `offers.json` for a database without touching the UI.
-
-### Categories (exact values)
+### Categories
 `Restaurant` · `Fashion & Clothing` · `Bank Card Offers` · `Electronics` · `Salon & Beauty` · `Grocery` · `Entertainment`
 
-### Areas (exact values)
+### Areas
 `Dhanmondi` · `Gulshan` · `Banani` · `Uttara` · `Mirpur` · `Mohammadpur` · `Old Dhaka`
+
+## 🛠 How the Admin panel works
+
+1. Open `/admin` and enter the `ADMIN_PASSWORD` from `.env.local`.
+2. On success, an httpOnly cookie is set. Every `/api/admin/*` request verifies that cookie (401 otherwise).
+3. Tabs: **Pending / Approved / Rejected**. Top row shows counts (pending / approved / total).
+4. Each offer card has: **Approve**, **Reject**, **Delete**, **Make Featured / Remove Featured**, and **Edit** (inline edit of title, discount text, valid until).
+5. Approving flips `status = 'approved'`, which makes the offer visible to everyone on the home page.
 
 ## 🛠 Tech stack
 
 - **Next.js 14** (App Router) + **Tailwind CSS**
+- **Supabase** (Postgres + Storage + RLS)
 - **Framer Motion** — animations
-- **Leaflet + react-leaflet + OpenStreetMap** — maps (free, no API keys)
+- **Leaflet + react-leaflet + OpenStreetMap** — maps
 - **lucide-react** — icons
-- All free, no paid services, no API keys.
+- Free stack, no paid services, no API keys.
 
-## 🗺 Roadmap (future phases)
+## 🗺 Roadmap
 
-- Move `offers.json` → a real database (Postgres/Supabase) behind `lib/offers.js`
-- Real discount search + verified offer submissions
-- Google AdSense integration inside the existing `<AdSlot />` placeholders
-- City offer alert notifications
+- Schedule: auto-expire offers when `valid_till` passes.
+- Email verification for submitters.
+- Google AdSense inside the existing `<AdSlot />` placeholders.
+- City-wide offer alert notifications.

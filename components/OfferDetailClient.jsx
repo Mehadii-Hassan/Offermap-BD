@@ -25,7 +25,7 @@ import {
 } from "@/lib/offers";
 import Countdown from "./Countdown";
 import MapView from "./MapView";
-import { getSavedIds, toggleSavedId, getVotes, castVote } from "@/lib/storage";
+import { getSavedIds, toggleSavedId, getVotedType, setVotedType } from "@/lib/storage";
 import Confetti from "./Confetti";
 
 export default function OfferDetailClient({ offer }) {
@@ -33,7 +33,12 @@ export default function OfferDetailClient({ offer }) {
   const [saved, setSaved] = useState(
     () => typeof window !== "undefined" && getSavedIds().includes(String(offer.id))
   );
-  const [votes, setVotes] = useState(() => getVotes(offer.id));
+  const [userVote, setUserVote] = useState(() => getVotedType(offer.id));
+  const [counts, setCounts] = useState({
+    worked: offer.workedCount ?? 0,
+    didntWork: offer.notWorkedCount ?? 0,
+  });
+  const [voting, setVoting] = useState(false);
   const [fireConfetti, setFireConfetti] = useState(false);
 
   function handleSave() {
@@ -46,8 +51,30 @@ export default function OfferDetailClient({ offer }) {
     }
   }
 
-  function handleVote(type) {
-    setVotes(castVote(offer.id, type));
+  async function handleVote(type) {
+    // localStorage guard: this browser already voted on this offer.
+    if (userVote) return;
+    setVoting(true);
+    try {
+      const res = await fetch("/api/vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: offer.id, type }),
+      });
+      if (res.ok) {
+        setVotedType(offer.id, type);
+        setUserVote(type);
+        setCounts((c) => ({
+          ...c,
+          [type === "worked" ? "worked" : "didntWork"]:
+            (type === "worked" ? c.worked : c.didntWork) + 1,
+        }));
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setVoting(false);
+    }
   }
 
   const directions = getDirectionsUrl(offer);
@@ -178,26 +205,28 @@ export default function OfferDetailClient({ offer }) {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => handleVote("worked")}
-                className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 font-bold transition active:scale-95 ${
-                  votes.userVote === "worked"
+                disabled={!!userVote || voting}
+                className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 font-bold transition active:scale-95 disabled:opacity-60 ${
+                  userVote === "worked"
                     ? "bg-emerald-500 text-white"
                     : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/25"
                 }`}
               >
-                <Check size={16} /> {t.worked} · {votes.worked}
+                <Check size={16} /> {t.worked} · {counts.worked}
               </button>
               <button
                 onClick={() => handleVote("didntWork")}
-                className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 font-bold transition active:scale-95 ${
-                  votes.userVote === "didntWork"
+                disabled={!!userVote || voting}
+                className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 font-bold transition active:scale-95 disabled:opacity-60 ${
+                  userVote === "didntWork"
                     ? "bg-red-500 text-white"
                     : "border border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/25"
                 }`}
               >
-                <X size={16} /> {t.didntWork} · {votes.didntWork}
+                <X size={16} /> {t.didntWork} · {counts.didntWork}
               </button>
               <span className="text-xs text-white/40">
-                {votes.worked + votes.didntWork} {t.votes}
+                {counts.worked + counts.didntWork} {t.votes}
               </span>
             </div>
           </div>

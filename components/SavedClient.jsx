@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Heart, ArrowRight } from "lucide-react";
@@ -8,16 +8,30 @@ import OfferCard from "./OfferCard";
 import { useApp } from "@/lib/app-context";
 import { getAllOffers } from "@/lib/offers";
 import { getSavedIds } from "@/lib/storage";
+import { GridSkeleton } from "./Skeletons";
 
 export default function SavedClient() {
   const { t } = useApp();
-  const [savedIds] = useState(() =>
-    typeof window !== "undefined" ? getSavedIds() : []
-  );
+  const [loading, setLoading] = useState(true);
+  const [savedOffers, setSavedOffers] = useState([]);
 
-  const savedOffers = getAllOffers().filter((o) =>
-    savedIds.includes(String(o.id))
-  );
+  useEffect(() => {
+    let active = true;
+    const ids = typeof window !== "undefined" ? getSavedIds() : [];
+    getAllOffers()
+      .then((offers) => {
+        if (!active) return;
+        setSavedOffers(offers.filter((o) => ids.includes(String(o.id))));
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 pb-24 md:pb-10">
@@ -37,7 +51,9 @@ export default function SavedClient() {
         </div>
       </motion.div>
 
-      {savedOffers.length === 0 ? (
+      {loading ? (
+        <GridSkeleton count={3} />
+      ) : savedOffers.length === 0 ? (
         <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-white/15 bg-white/5 px-6 py-20 text-center">
           <div className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-tr from-accent-pink/30 to-accent-purple/30">
             <Heart size={30} className="text-white/50" />
