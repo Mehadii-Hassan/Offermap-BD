@@ -170,7 +170,7 @@ Division → District dropdowns cover all of Bangladesh (8 divisions, 64 distric
 - **Strict validation**: an offer is published **only** if `title`, `shop_name`, `discount_text`, a `valid_till` that is today or later, and valid `lat`/`lng` (inside Bangladesh) are all present. Anything missing these is **skipped** and listed in the report.
 - **`scrape_log`** table stores every processed `url`, so URLs already handled are skipped on later runs (unique constraint on `url` required).
 - Offers are **upserted** into Supabase by **`dedupe_key`** (unique constraint required) via `onConflict: 'dedupe_key'`, so re-runs don't create duplicates.
-- **Query rotation**: a stable pool of queries is consumed round-robin (`SCRAPE_QUERY_START`) so each run covers new ground.
+- **Query rotation**: a pool of queries (English + Bengali, covering all categories across Bangladesh-wide, the 8 divisions, and major districts) **auto-advances daily** with no DB table and no required env — `dayNumber * BATCH_SIZE % poolLength`. `SCRAPE_QUERY_START` is an optional manual override if set. The report shows pool size, today's start index, and how many days a full rotation takes.
 - **`SCRAPE_DRY_RUN=true`** writes nothing — it only builds the report.
 - A JSON report is written to `/tmp/scrape-report.json` (uploaded as a GitHub Actions artifact).
 

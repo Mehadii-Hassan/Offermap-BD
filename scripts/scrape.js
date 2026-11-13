@@ -57,16 +57,43 @@ const supabase = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Stable query rotation pool. Round-robin per run.
+// Stable query rotation pool. Covers all offer categories across
+// Bangladesh-wide + the 8 divisions + major districts, in English and Bengali,
+// in a fixed (deliberately non-alphabetical) order so each day's batch mixes
+// different categories and places. Auto-advances daily (see main()).
 const QUERY_ROTATION = [
-  "best restaurant deals dhaka bangladesh",
-  "dhaka fashion discount coupons bangladesh",
-  "buy one get one free dhaka",
-  "bangladesh bank card cash back offers",
-  "dhaka electronics discount sale bangladesh",
-  "dhaka salon beauty discount coupon",
-  "dhaka grocery store savings bangladesh",
-  "dhaka travel hotel offers bangladesh",
+  "restaurant table booking discount deals bangladesh",
+  "ঢাকায় রেস্টুরেন্ট খাবারের অফার ডিসকাউন্ট",
+  "fashion clothing bogo offer sale dhaka chattogram",
+  "শাড়ি পাঞ্জাবি ফ্যাশন ছাড় ডিসকাউন্ট বাংলাদেশ",
+  "credit card dining cashback offer bangladesh",
+  "ব্যাংক কার্ড কেনাকাটায় ক্যাশব্যাক অফার বাংলাদেশ",
+  "electronics smartphone tv installment offer dhaka",
+  "ঢাকায় ইলেকট্রনিক্স গেজেট ছাড় অফার দোকান",
+  "salon spa beauty package discount dhaka sylhet",
+  "সেলুন বিউটি প্যাকেজ ছাড় অফার বাংলাদেশ",
+  "grocery store kitchen essentials savings offer",
+  "মুদি দোকানে জরুরি পণ্য ছাড় সাশ্রয় অফার",
+  "movie theatre ticket offer entertainment bangladesh",
+  "বিনোদন সিনেমা টিকিট অফার ডিসকাউন্ট বাংলাদেশ",
+  "hotel resort staycation deal dhaka coxs bazar",
+  "ভ্রমণ হোটেল রিসোর্ট ছাড় অফার কক্সবাজার ঢাকা",
+  "mobile phone gadget deal offer bangladesh",
+  "মোবাইল ফোন গ্যাজেট দাম ছাড় অফার বাংলাদেশ",
+  "health clinic pharmacy discount offer khulna rajshahi",
+  "স্বাস্থ্য ক্লিনিক ফার্মেসি ছাড় অফার খুলনা রাজশাহী",
+  "online course coaching discount offer bangladesh",
+  "অনলাইন কোর্স প্রশিক্ষণ ছাড় অফার বাংলাদেশ",
+  "online shopping daily deals free delivery rangpur",
+  "অনলাইন কেনাকাটা দৈনিক ডিল ফ্রি ডেলিভারি রংপুর",
+  "bikash nagad mobile wallet cashback offer",
+  "বিকাশ নগদ মোবাইল ওয়ালেট ক্যাশব্যাক অফার",
+  "dining romantic dinner deal dhaka gulshan",
+  "চট্টগ্রাম গুলশান ডাইনিং ডিনার ডিল অফার",
+  "furniture home appliance offer mymensingh barishal",
+  "আসবাবপত্র গৃহস্থালি যন্ত্রাংশ ছাড় অফার ময়মনসিংহ বরিশাল",
+  "gym fitness membership discount offer bangladesh",
+  "জিম ফিটনেস সদস্যপদ ছাড় অফার বাংলাদেশ",
 ];
 
 function nowISO() {
@@ -330,9 +357,30 @@ async function main() {
     `🚀 Scrape run started (mode: ${DRY_RUN ? "DRY_RUN" : "LIVE"}, batch: ${BATCH_SIZE})`
   );
 
+  // Auto-advance the query pool daily, with no DB table and no required env.
+  const dayNumber = Math.floor(Date.now() / 86400000);
+  const poolLength = QUERY_ROTATION.length;
+  const autoStart = (dayNumber * BATCH_SIZE) % poolLength;
+  const poolStart = process.env.SCRAPE_QUERY_START !== undefined
+    ? Number(process.env.SCRAPE_QUERY_START)
+    : autoStart;
+  const rotationDays = Math.ceil(poolLength / BATCH_SIZE);
+
+  // Take BATCH_SIZE queries from poolStart, wrapping around the end.
+  const queries = [];
+  for (let i = 0; i < BATCH_SIZE; i++) {
+    queries.push(QUERY_ROTATION[(poolStart + i) % poolLength]);
+  }
+
   const report = {
     startedAt: nowISO(),
     mode: DRY_RUN ? "dry_run" : "live",
+    rotation: {
+      poolTotal: poolLength,
+      todayPoolStart: poolStart,
+      batchSize: BATCH_SIZE,
+      daysPerFullRotation: rotationDays,
+    },
     queriesRun: [],
     inserted: [],
     skipped: [],
@@ -341,10 +389,8 @@ async function main() {
     completedAt: nowISO(),
   };
 
-  const poolStart = Number(process.env.SCRAPE_QUERY_START || 0);
-  const queries = QUERY_ROTATION.slice(
-    poolStart,
-    poolStart + BATCH_SIZE
+  console.log(
+    `🧮 Query pool: ${poolLength} total · today's start: ${poolStart} · full rotation: ${rotationDays} day(s), ${BATCH_SIZE} per run`
   );
 
   for (const q of queries) {
