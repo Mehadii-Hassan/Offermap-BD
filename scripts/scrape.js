@@ -232,27 +232,23 @@ async function urlIsProcessed(sourceUrl) {
   const { data, error } = await supabase
     .from("scrape_log")
     .select("id")
-    .eq("source_url", sourceUrl)
+    .eq("url", sourceUrl)
     .maybeSingle();
   if (error) return false;
   return Boolean(data);
 }
 
-async function logProcessedUrl(sourceUrl, offerId, success) {
+async function logProcessedUrl(sourceUrl) {
   if (!sourceUrl) return;
   await supabase
     .from("scrape_log")
     .upsert(
       {
-        source_url: sourceUrl,
-        offer_id: offerId || null,
-        processed_at: nowISO(),
-        success,
+        url: sourceUrl,
+        scraped_at: nowISO(),
       },
-      { onConflict: "source_url" }
-    )
-    .select("id")
-    .maybeSingle();
+      { onConflict: "url" }
+    );
 }
 
 async function upsertOffers(offersToInsert) {
@@ -322,7 +318,7 @@ async function upsertOffers(offersToInsert) {
     if (error) {
       throw new Error(`Upsert failed: ${error.message}`);
     }
-    await logProcessedUrl(o.sourceUrl, data?.id, true);
+    await logProcessedUrl(o.sourceUrl);
     results.push({ ...row, id: data?.id, status: "inserted" });
   }
 

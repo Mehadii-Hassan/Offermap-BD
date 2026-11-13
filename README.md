@@ -29,6 +29,7 @@ Discover discounts, deals and hot offers **near your location** across Banglades
    - Create the `offers` table with these columns:
      `id (uuid, default gen_random_uuid()), title, shop_name, category, division, district, area, address, lat, lng, discount_text, description, valid_till (date), payment_method, image, is_featured (bool), hot_score (int), status (text: 'pending'/'approved'/'rejected'), source, source_url, dedupe_key, worked_count (int), not_worked_count (int), created_at (timestamptz, default now())`.
    - Add a **unique constraint on `dedupe_key`** so the scraper upserts by it.
+   - Create the `scrape_log` table: `id (uuid, default gen_random_uuid()), url (text, unique, not null), scraped_at (timestamptz, default now())`.
    - Create a public storage bucket named `offer-images`.
    - Enable RLS: allow public **read** only where `status = 'approved'`. Grant the anon role select on `offers`.
 
@@ -167,7 +168,7 @@ Division → District dropdowns cover all of Bangladesh (8 divisions, 64 distric
 - **Gemini** (`gemini-1.5-flash`) extracts structured offers (title, shop, discount, category, location, description).
 - **Nominatim** reverse-geocodes any coordinates and fills the address/area.
 - **Strict validation**: an offer is published **only** if `title`, `shop_name`, `discount_text`, a `valid_till` that is today or later, and valid `lat`/`lng` (inside Bangladesh) are all present. Anything missing these is **skipped** and listed in the report.
-- **`scrape_log`** table records every processed `source_url`, so URLs already handled are skipped on later runs (unique constraint on `source_url` required).
+- **`scrape_log`** table stores every processed `url`, so URLs already handled are skipped on later runs (unique constraint on `url` required).
 - Offers are **upserted** into Supabase by **`dedupe_key`** (unique constraint required) via `onConflict: 'dedupe_key'`, so re-runs don't create duplicates.
 - **Query rotation**: a stable pool of queries is consumed round-robin (`SCRAPE_QUERY_START`) so each run covers new ground.
 - **`SCRAPE_DRY_RUN=true`** writes nothing — it only builds the report.
@@ -181,7 +182,7 @@ node scripts/scrape.js                           # live run (auto-publishes)
 
 The GitHub Action (`.github/workflows/scrape.yml`) runs it daily at **02:00 UTC** as a real run (auto-publishes), plus manual dispatch with an optional `dry_run` toggle. Set these repo secrets for it to work: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD`, `TAVILY_API_KEY`, `GEMINI_API_KEY`, `CRON_SECRET`.
 
-The `offers` table needs a **unique constraint on `dedupe_key`**, and a separate **`scrape_log`** table with a **unique constraint on `source_url`** (plus `offer_id`, `processed_at`, `success` columns).
+The `offers` table needs a **unique constraint on `dedupe_key`**, and a separate **`scrape_log`** table with columns `id (uuid)`, `url (text, unique)`, `scraped_at (timestamptz)` — i.e. exactly `scrape_log(id uuid, url text unique, scraped_at timestamptz)`. The script selects by `url`, upserts `{ url, scraped_at }` with `onConflict: 'url'`, and needs **no other columns** on the `scrape_log` table.
 
 ## 🛠 Tech stack
 
