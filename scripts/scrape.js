@@ -12,6 +12,7 @@
 //            SCRAPE_QUERY_START (manual pool-override), SCRAPE_RESULTS.
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
+import { tmpdir } from "os";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { createClient } from "@supabase/supabase-js";
@@ -39,7 +40,7 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const DRY_RUN = process.env.SCRAPE_DRY_RUN === "true";
-const REPORT_FILE = "/tmp/scrape-report.json";
+const REPORT_FILE = join(tmpdir(), "scrape-report.json");
 // Real runs default to 30 queries; MAX_QUERIES_PER_RUN=3 is a quick test.
 const MAX_QUERIES_PER_RUN = Number(
   process.env.MAX_QUERIES_PER_RUN || process.env.SCRAPE_BATCH_SIZE || 30
@@ -251,7 +252,7 @@ JSON response format:
 ]`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
