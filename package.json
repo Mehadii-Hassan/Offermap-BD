@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "node scripts/seed.js",
+    "clean-samples": "node scripts/clean-samples.js",
     "scrape": "node scripts/scrape.js",
     "scrape:dry": "SCRAPE_DRY_RUN=true node scripts/scrape.js"
   },

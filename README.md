@@ -1,6 +1,6 @@
 # OfferMap BD 🇧🇩
 
-Discover discounts, deals and hot offers **near your location** in Dhaka. Mobile-first, vibrant, dark/light themed, and free to use.
+Discover discounts, deals and hot offers **near your location** across Bangladesh. Mobile-first, vibrant, dark/light themed, and free to use.
 
 **Phase 1** delivered the full UI (hero search, Near Me, filters, list/map, saved, English/বাংলা, dark/light).
 **Phase 2** moved all data to **Supabase**, added a public offer submission form (`/add`), and a mobile-friendly **admin approval panel** (`/admin`).
@@ -50,6 +50,10 @@ Discover discounts, deals and hot offers **near your location** in Dhaka. Mobile
    npm install
    npm run seed      # inserts the 30 sample offers from data/offers.json as 'approved'
    ```
+   > To remove just those 30 sample offers later (and leave user/scraped ones alone):
+   > ```bash
+   > npm run clean-samples
+   > ```
 
 4. **Run**
    ```bash
@@ -158,22 +162,26 @@ Division → District dropdowns cover all of Bangladesh (8 divisions, 64 distric
 
 ## 🤖 Web scraping pipeline
 
-`scripts/scrape.js` finds fresh offers from the web and loads them as `pending`:
+`scripts/scrape.js` finds fresh offers from the web and **auto-publishes** them directly as `approved` (no manual review):
 - **Tavily** web search returns the top hits per query.
 - **Gemini** (`gemini-1.5-flash`) extracts structured offers (title, shop, discount, category, location, description).
 - **Nominatim** reverse-geocodes any coordinates and fills the address/area.
-- Offers are **upserted** into Supabase by **`dedupe_key`** (unique constraint required) so re-runs don't create duplicates.
+- **Strict validation**: an offer is published **only** if `title`, `shop_name`, `discount_text`, a `valid_till` that is today or later, and valid `lat`/`lng` (inside Bangladesh) are all present. Anything missing these is **skipped** and listed in the report.
+- **`scrape_log`** table records every processed `source_url`, so URLs already handled are skipped on later runs (unique constraint on `source_url` required).
+- Offers are **upserted** into Supabase by **`dedupe_key`** (unique constraint required) via `onConflict: 'dedupe_key'`, so re-runs don't create duplicates.
 - **Query rotation**: a stable pool of queries is consumed round-robin (`SCRAPE_QUERY_START`) so each run covers new ground.
 - **`SCRAPE_DRY_RUN=true`** writes nothing — it only builds the report.
 - A JSON report is written to `/tmp/scrape-report.json` (uploaded as a GitHub Actions artifact).
 
 Run locally:
 ```bash
-SCRAPE_DRY_RUN=true node scripts/scrape.js      # dry run
-node scripts/scrape.js                           # live run
+SCRAPE_DRY_RUN=true node scripts/scrape.js      # dry run (no DB writes)
+node scripts/scrape.js                           # live run (auto-publishes)
 ```
 
-The GitHub Action (`.github/workflows/scrape.yml`) runs it daily at **02:00 UTC**, plus manual dispatch. Set these repo secrets for it to work: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD`, `TAVILY_API_KEY`, `GEMINI_API_KEY`, `CRON_SECRET`. New scraped offers land as `pending` and need approval in `/admin`.
+The GitHub Action (`.github/workflows/scrape.yml`) runs it daily at **02:00 UTC** as a real run (auto-publishes), plus manual dispatch with an optional `dry_run` toggle. Set these repo secrets for it to work: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD`, `TAVILY_API_KEY`, `GEMINI_API_KEY`, `CRON_SECRET`.
+
+The `offers` table needs a **unique constraint on `dedupe_key`**, and a separate **`scrape_log`** table with a **unique constraint on `source_url`** (plus `offer_id`, `processed_at`, `success` columns).
 
 ## 🛠 Tech stack
 

@@ -23,7 +23,10 @@ import {
   whatsappShareUrl,
   messengerShareUrl,
   formatDate,
+  distanceToOffer,
+  formatDistance,
 } from "@/lib/offers";
+import { getGeo } from "@/lib/geo";
 import Countdown from "./Countdown";
 import MapView from "./MapView";
 import { getSavedIds, toggleSavedId, getVotedType, setVotedType } from "@/lib/storage";
@@ -31,6 +34,12 @@ import Confetti from "./Confetti";
 
 export default function OfferDetailClient({ offer }) {
   const { t } = useApp();
+  const [userCoords, setUserCoords] = useState(
+    () => getGeo() || null
+  );
+  const userDistance = userCoords
+    ? distanceToOffer(offer, userCoords.lat, userCoords.lng)
+    : null;
   const [saved, setSaved] = useState(
     () => typeof window !== "undefined" && getSavedIds().includes(String(offer.id))
   );
@@ -158,6 +167,12 @@ export default function OfferDetailClient({ offer }) {
               <span className="inline-flex items-center gap-1">
                 <MapPin size={13} className="text-accent-orange" /> {offer.area}
               </span>
+              {userDistance != null && (
+                <span className="inline-flex items-center gap-1 font-semibold text-white/80">
+                  <Navigation size={13} className="text-accent-pink" />
+                  {formatDistance(userDistance)}
+                </span>
+              )}
               {offer.viewsToday != null && (
                 <span className="inline-flex items-center gap-1">
                   <Flame size={13} className="text-accent-orange" />
@@ -170,6 +185,12 @@ export default function OfferDetailClient({ offer }) {
 
         {/* Body */}
         <div className="p-5 sm:p-7">
+          {offer.address && (
+            <div className="mb-6 flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">
+              <MapPin size={16} className="mt-0.5 shrink-0 text-accent-orange" />
+              <span>{offer.address}</span>
+            </div>
+          )}
           {/* Validity countdown */}
           <div className="mb-6 flex flex-wrap items-center gap-4">
             <div className="glass inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white/80">
@@ -265,14 +286,31 @@ export default function OfferDetailClient({ offer }) {
             </div>
           </div>
 
-          {/* Mini map */}
+          {/* Bigger map with exact pin */}
           <div className="overflow-hidden rounded-2xl border border-white/10">
             <MapView
               offers={[offer]}
-              userCoords={null}
+              userCoords={userCoords}
               selectedId={offer.id}
               onSelect={() => {}}
             />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/10 bg-white/5 px-4 py-3 text-xs text-white/60">
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={12} className="text-accent-orange" />
+                {offer.area}
+                {offer.lat != null && offer.lng != null && (
+                  <span className="text-white/40">
+                    · {offer.lat.toFixed(4)}, {offer.lng.toFixed(4)}
+                  </span>
+                )}
+              </span>
+              {userDistance != null && (
+                <span className="inline-flex items-center gap-1">
+                  <Navigation size={12} className="text-accent-pink" />
+                  {formatDistance(userDistance)}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </motion.article>

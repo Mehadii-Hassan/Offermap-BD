@@ -5,7 +5,7 @@ import { pageMeta } from "@/lib/meta";
 export const metadata = pageMeta({
   title: "Page Not Found",
   description:
-    "The page you are looking for could not be found. Explore live offers across Dhaka on OfferMap BD instead.",
+    "The page you are looking for could not be found. Explore live offers across Bangladesh on OfferMap BD instead.",
   path: "/404",
 });
 
@@ -19,7 +19,7 @@ export default function NotFound() {
         </h1>
         <p className="mt-3 max-w-md text-white/50">
           The page you&apos;re looking for doesn&apos;t exist or may have
-          expired. No worries — plenty more great offers await in Dhaka.
+          expired. No worries — plenty more great offers await in Bangladesh.
         </p>
         <Link
           href="/"

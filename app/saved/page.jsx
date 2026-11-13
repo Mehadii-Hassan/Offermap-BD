@@ -5,7 +5,7 @@ import { pageMeta } from "@/lib/meta";
 export const metadata = pageMeta({
   title: "Saved Offers",
   description:
-    "View the offers you saved for later on OfferMap BD. Keep your favourite deals in Dhaka close at hand.",
+    "View the offers you saved for later on OfferMap BD. Keep your favourite deals in Bangladesh close at hand.",
   path: "/saved",
 });
 

@@ -2,13 +2,13 @@ name: Daily Scrape
 
 on:
   schedule:
-    - cron: "0 2 * * *" # daily 02:00 UTC
+    - cron: "0 2 * * *" # daily 02:00 UTC (real run, auto-publishes)
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Run scrape in dry-run mode (no DB writes)"
+        description: "Run scrape in dry-run mode (no DB writes). Leave unchecked for a real run."
         type: boolean
-        default: true
+        default: false
 
 jobs:
   scrape:
@@ -37,10 +37,9 @@ jobs:
           TAVILY_API_KEY=${{ secrets.TAVILY_API_KEY }}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           CRON_SECRET=${{ secrets.CRON_SECRET }}
-          SCRAPE_DRY_RUN=${{ inputs.dry_run || 'true' }}
+          SCRAPE_DRY_RUN=${{ inputs.dry_run == 'true' }}
           SCRAPE_BATCH_SIZE=3
           SCRAPE_RESULTS=5
-          SCRAPE_MAX_OFFERS=30
           EOF
 
       - name: Run scraper
@@ -50,7 +49,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SCRAPE_DRY_RUN: ${{ inputs.dry_run || 'true' }}
+          SCRAPE_DRY_RUN: ${{ inputs.dry_run == 'true' }}
 
       - name: Upload scrape report
         if: always()

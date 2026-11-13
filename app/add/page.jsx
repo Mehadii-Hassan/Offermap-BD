@@ -5,7 +5,7 @@ import { pageMeta } from "@/lib/meta";
 export const metadata = pageMeta({
   title: "Add Offer — Offer Add Koro",
   description:
-    "Have a great deal in Dhaka? Submit your offer to OfferMap BD and it will go live after a quick review.",
+    "Have a great deal across Bangladesh? Submit your offer to OfferMap BD and it will go live after a quick review.",
   path: "/add",
 });
 

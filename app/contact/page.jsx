@@ -4,7 +4,7 @@ import { pageMeta } from "@/lib/meta";
 export const metadata = pageMeta({
   title: "Contact Us",
   description:
-    "Get in touch with the OfferMap BD team. Send us offers, report an issue, or partner with us to feature your business in Dhaka.",
+    "Get in touch with the OfferMap BD team. Send us offers, report an issue, or partner with us to feature your business in Bangladesh.",
   path: "/contact",
 });
 

@@ -25,15 +25,15 @@ export default function AboutPage() {
           About <span className="text-gradient">OfferMap BD</span>
         </h1>
         <p className="mb-8 text-white/50">
-          Helping you never overpay for the things you love in Dhaka.
+          Helping you never overpay for the things you love in Bangladesh.
         </p>
 
         <div className="space-y-6 leading-relaxed text-white/70">
           <section>
             <h2 className="mb-2 text-xl font-bold text-white">Our mission</h2>
             <p>
-              Discover data shows most shoppers in Dhaka miss out on genuine
-              savings because offers are scattered across social media,
+              Discover data shows most shoppers in Bangladesh miss out on
+              genuine savings because offers are scattered across social media,
               billboards and storefronts. OfferMap BD brings every discount,
               deal and hot offer into one beautiful, location-aware place — so
               you can find the best value around your neighbourhood in seconds.
@@ -43,7 +43,7 @@ export default function AboutPage() {
           <section>
             <h2 className="mb-2 text-xl font-bold text-white">How it works</h2>
             <p>
-              We curate and verify offers from across Dhaka — restaurants,
+              We curate and verify offers from across Bangladesh — restaurants,
               fashion, electronics, salons, grocers and entertainment. Every
               listing includes the discount, validity, area and how to pay. Use
               your location to see what&apos;s nearest, save your favourites,
@@ -64,8 +64,8 @@ export default function AboutPage() {
 
         <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat value="30+" label="Live offers" />
-          <Stat value="7" label="Areas in Dhaka" />
-          <Stat value="7" label="Categories" />
+          <Stat value="64" label="Districts covered" />
+          <Stat value="13" label="Categories" />
           <Stat value="100%" label="Free to use" />
         </div>
       </main>

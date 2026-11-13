@@ -7,13 +7,13 @@ export const metadata = {
     template: "%s | OfferMap BD",
   },
   description:
-    "Discover discounts, deals and hot offers near your location in Dhaka. Search by category, area and payment method across restaurants, fashion, electronics and more.",
+    "Discover discounts, deals and hot offers near your location across Bangladesh. Search by category, division, district and payment method across restaurants, fashion, electronics and more.",
   keywords:
-    "offers, discounts, deals, Dhaka, Bangladesh, BOGO, cashback, restaurant offers, fashion deals",
+    "offers, discounts, deals, Bangladesh, Dhaka, BOGO, cashback, restaurant offers, fashion deals",
   openGraph: {
     title: "OfferMap BD — Discover Offers Near You",
     description:
-      "The fastest way to find discounts, deals and hot offers around your neighbourhood in Dhaka.",
+      "The fastest way to find discounts, deals and hot offers around your neighbourhood across Bangladesh.",
     type: "website",
     locale: "en_US",
     siteName: "OfferMap BD",
@@ -22,7 +22,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "OfferMap BD — Discover Offers Near You",
     description:
-      "Find discounts, deals and hot offers around your neighbourhood in Dhaka.",
+      "Find discounts, deals and hot offers around your neighbourhood across Bangladesh.",
   },
   robots: {
     index: true,

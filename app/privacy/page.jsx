@@ -15,7 +15,7 @@ const sections = [
   },
   {
     title: "2. Location data",
-    body: "When you press the 'Near Me' button, we request your device's location purely to sort offers by how close they are to you. Your location is processed in your browser and is never stored on our servers. If you decline, you can always choose a Dhaka area manually.",
+    body: "When you press the 'Near Me' button, we request your device's location purely to sort offers by how close they are to you. Your location is processed in your browser and is never stored on our servers. If you decline, you can always choose a division and district manually.",
   },
   {
     title: "3. Local storage",

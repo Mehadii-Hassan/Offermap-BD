@@ -1,15 +1,18 @@
 // Scrape script: Tavily web search -> Gemini offer extraction -> Nominatim
-// geocoding -> Supabase upsert (status 'pending'). Supports DRY_RUN and query
-// rotation with a stable report.
+// geocoding -> Supabase upsert. Offers missing any required field (title,
+// shop_name, discount_text, valid_till today-or-later, valid lat/lng) are
+// SKIPPED. Valid offers are auto-published with status='approved'. Supports
+// DRY_RUN and query rotation with a stable report.
 //
-// Run: node scripts/scrape.js
+// Run: node scripts/scrape.js   (or SCRAPE_DRY_RUN=true node scripts/scrape.js)
 // Env vars: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY, TAVILY_API_KEY,
 //           GEMINI_API_KEY, SCRAPE_DRY_RUN.
 
-import { readFileSync, writeFileSync, appendFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { createClient } from "@supabase/supabase-js";
+import { isInsideBangladesh } from "../lib/bd-locations.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -36,8 +39,6 @@ const DRY_RUN = process.env.SCRAPE_DRY_RUN === "true";
 const REPORT_FILE = "/tmp/scrape-report.json";
 const BATCH_SIZE = Number(process.env.SCRAPE_BATCH_SIZE || 3);
 const RESULTS_PER_QUERY = Number(process.env.SCRAPE_RESULTS || 5);
-const VALID_DAYS = Number(process.env.SCRAPE_VALID_DAYS || 30);
-const MAX_OFFERS = Number(process.env.SCRAPE_MAX_OFFERS || 30);
 
 if (!url || !serviceKey) {
   console.error("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local");
@@ -72,18 +73,32 @@ function nowISO() {
   return new Date().toISOString();
 }
 
-function validTillDate() {
-  const d = new Date();
-  d.setDate(d.getDate() + VALID_DAYS);
-  return d.toISOString().slice(0, 10);
-}
-
 function buildDedupeKey(shopName, discountText, area, sourceUrl) {
   const source = sourceUrl ? sourceUrl.toString().trim().toLowerCase() : "";
   const discount = (discountText || "").toString().trim().toLowerCase();
   const shop = (shopName || "").toString().trim().toLowerCase();
   const areaName = (area || "").toString().trim().toLowerCase();
   return `ombd-${shop}-${discount}-${areaName}-${source}`.slice(0, 200);
+}
+
+const todayDateStr = () => new Date().toISOString().slice(0, 10);
+
+// Return a reason string if the offer is NOT publishable, else null.
+function invalidOfferReason(o) {
+  if (!o || !String(o.title || "").trim()) return "missing title";
+  if (!String(o.shopName || "").trim()) return "missing shop_name";
+  if (!String(o.discountText || "").trim()) return "missing discount_text";
+
+  const lat = Number(o.lat);
+  const lng = Number(o.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "invalid lat/lng";
+  if (!isInsideBangladesh(lat, lng)) return "lat/lng outside Bangladesh";
+
+  const vt = String(o.validTill || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(vt)) return "missing valid_till";
+  if (vt < todayDateStr()) return "expired valid_till";
+
+  return null;
 }
 
 async function tavilySearch(query) {
@@ -184,13 +199,6 @@ async function nominatimReverse(lat, lng) {
   return res.json();
 }
 
-async function findAreaForCoordinates(lat, lng, fallbackArea) {
-  const geo = await nominatimReverse(lat, lng);
-  const displayName = geo?.display_name || "";
-  const area = displayName.split(",").pop()?.trim() || fallbackArea;
-  return { area, displayName };
-}
-
 async function scrapeQuery(query) {
   const results = await tavilySearch(query);
   const rawOffers = await geminiExtract(query, results);
@@ -219,39 +227,93 @@ async function scrapeQuery(query) {
   return offers;
 }
 
-async function upsertOffers(offersToInsert) {
-  const payload = offersToInsert.map((o) => ({
-    title: o.title,
-    shop_name: o.shopName,
-    category: o.category,
-    area: o.area,
-    division: o.division || "",
-    district: o.district || "",
-    address: o.displayName || o.area || "",
-    lat: o.lat,
-    lng: o.lng,
-    discount_text: o.discountText,
-    description: o.description,
-    valid_till: o.validTill || validTillDate(),
-    payment_method: o.paymentMethod,
-    image: null,
-    is_featured: false,
-    hot_score: Math.floor(Math.random() * 50) + 40,
-    status: "pending",
-    source: o.source || "scraper",
-    source_url: o.sourceUrl || null,
-    dedupe_key: o.dedupeKey || buildDedupeKey(o.shopName, o.discountText, o.area, o.sourceUrl),
-    worked_count: 0,
-    not_worked_count: 0,
-    created_at: nowISO(),
-  }));
+async function urlIsProcessed(sourceUrl) {
+  if (!sourceUrl) return false;
+  const { data, error } = await supabase
+    .from("scrape_log")
+    .select("id")
+    .eq("source_url", sourceUrl)
+    .maybeSingle();
+  if (error) return false;
+  return Boolean(data);
+}
 
+async function logProcessedUrl(sourceUrl, offerId, success) {
+  if (!sourceUrl) return;
+  await supabase
+    .from("scrape_log")
+    .upsert(
+      {
+        source_url: sourceUrl,
+        offer_id: offerId || null,
+        processed_at: nowISO(),
+        success,
+      },
+      { onConflict: "source_url" }
+    )
+    .select("id")
+    .maybeSingle();
+}
+
+async function upsertOffers(offersToInsert) {
   const results = [];
-  for (const row of payload) {
+  const skipped = [];
+
+  for (const o of offersToInsert) {
+    const reason = invalidOfferReason(o);
+    if (reason) {
+      skipped.push({
+        title: o.title,
+        shopName: o.shopName,
+        url: o.sourceUrl,
+        reason,
+      });
+      console.log(`   ⏭ skipped: ${o.title || "(no title)"} — ${reason}`);
+      continue;
+    }
+
+    if (await urlIsProcessed(o.sourceUrl)) {
+      skipped.push({
+        title: o.title,
+        shopName: o.shopName,
+        url: o.sourceUrl,
+        reason: "already processed (scrape_log)",
+      });
+      console.log(`   ⏭ skipped: ${o.title} — URL already processed`);
+      continue;
+    }
+
+    const row = {
+      title: String(o.title).trim(),
+      shop_name: String(o.shopName).trim(),
+      category: o.category,
+      area: o.area,
+      division: o.division || "",
+      district: o.district || "",
+      address: o.displayName || o.area || "",
+      lat: Number(o.lat),
+      lng: Number(o.lng),
+      discount_text: String(o.discountText).trim(),
+      description: o.description,
+      valid_till: String(o.validTill).trim(),
+      payment_method: o.paymentMethod,
+      image: null,
+      is_featured: false,
+      hot_score: Math.floor(Math.random() * 50) + 40,
+      status: "approved",
+      source: o.source || "scraper",
+      source_url: o.sourceUrl || null,
+      dedupe_key: buildDedupeKey(o.shopName, o.discountText, o.area, o.sourceUrl),
+      worked_count: 0,
+      not_worked_count: 0,
+      created_at: nowISO(),
+    };
+
     if (DRY_RUN) {
       results.push({ ...row, status: "dry_run" });
       continue;
     }
+
     const { data, error } = await supabase
       .from("offers")
       .upsert(row, { onConflict: "dedupe_key" })
@@ -260,9 +322,11 @@ async function upsertOffers(offersToInsert) {
     if (error) {
       throw new Error(`Upsert failed: ${error.message}`);
     }
+    await logProcessedUrl(o.sourceUrl, data?.id, true);
     results.push({ ...row, id: data?.id, status: "inserted" });
   }
-  return results;
+
+  return { results, skipped };
 }
 
 async function main() {
@@ -275,6 +339,7 @@ async function main() {
     mode: DRY_RUN ? "dry_run" : "live",
     queriesRun: [],
     inserted: [],
+    skipped: [],
     failed: [],
     errors: [],
     completedAt: nowISO(),
@@ -290,13 +355,14 @@ async function main() {
     console.log(`🔎 Query: ${q}`);
     try {
       const offers = await scrapeQuery(q);
-      const results = await upsertOffers(offers);
+      const { results, skipped } = await upsertOffers(offers);
       const ok = results.filter((r) => r.status === "inserted");
       const dry = results.filter((r) => r.status === "dry_run");
-      report.queriesRun.push({ query: q, offersFound: offers.length });
+      report.queriesRun.push({ query: q, offersFound: offers.length, skipped: skipped.length });
+      if (skipped.length) report.skipped.push(...skipped);
       if (ok.length) report.inserted.push(...ok);
       if (dry.length) report.inserted.push(...dry);
-      console.log(`   → ${ok.length ? ok.length + " inserted" : "0 inserted"} (${offers.length} offers found)`);
+      console.log(`   → ${ok.length ? ok.length + " auto-published" : "0 published"} (${offers.length} found, ${skipped.length} skipped)`);
     } catch (err) {
       console.error(`❌ Query failed: ${q}`, err.message);
       report.failed.push({ query: q, error: err.message });
@@ -307,7 +373,7 @@ async function main() {
   writeFileSync(REPORT_FILE, JSON.stringify(report, null, 2));
   console.log(`✅ Report written to ${REPORT_FILE}`);
   console.log(
-    `✅ Done. Inserted: ${report.inserted.length}, Failed: ${report.failed.length}`
+    `✅ Done. Auto-published: ${report.inserted.length}, Skipped: ${report.skipped.length}, Failed: ${report.failed.length}`
   );
 }
 
