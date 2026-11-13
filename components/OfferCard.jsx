@@ -9,6 +9,8 @@ import {
   Clock,
   Flame,
   Check,
+  Globe,
+  Users,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { formatDistance } from "@/lib/offers";
@@ -41,6 +43,11 @@ export default function OfferCard({
     setSaved(!wasSaved);
     if (!wasSaved) onFirstSave(offer);
   }
+
+  // Source badge: scraper → "Auto-collected", else "Submitted by community"
+  const isScraped = offer.source === "scraper";
+  const sourceLabel = isScraped ? t.autoCollected : t.submittedByCommunity;
+  const SourceIcon = isScraped ? Globe : Users;
 
   return (
     <Link href={`/offer/${offer.id}`} data-mouse="true">
@@ -101,6 +108,13 @@ export default function OfferCard({
               </span>
             </div>
           )}
+
+          {/* Source badge chip */}
+          <div className="absolute bottom-3 right-3">
+            <span className="inline-flex items-center gap-1 rounded-md bg-black/50 backdrop-blur px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+              <SourceIcon size={11} /> {sourceLabel}
+            </span>
+          </div>
         </div>
 
         {/* Body */}

@@ -1,5 +1,8 @@
+// Admin action route: approve, reject, feature, edit, delete, delete-expired.
+// All actions require the admin cookie.
+
 import { NextResponse } from "next/server";
-import { hasAdminEnv, adminUpdateOffer, adminDeleteOffer } from "@/lib/supabaseAdmin";
+import { hasAdminEnv, adminUpdateOffer, adminDeleteOffer, adminGetAllOffers } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/admin-auth";
 
 export async function PATCH(req, { params }) {

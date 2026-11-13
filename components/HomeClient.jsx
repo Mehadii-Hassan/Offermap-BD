@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { List, Map as MapIcon } from "lucide-react";
 import Hero from "./Hero";
-import CategoryChips from "./CategoryChips";
 import FilterBar from "./FilterBar";
 import SectionHeading from "./SectionHeading";
 import OfferCard from "./OfferCard";
@@ -19,6 +19,18 @@ import {
   distanceToOffer,
   discountValue,
 } from "@/lib/offers";
+import { getGeo, setGeo, wasAsked, markAsked } from "@/lib/geo";
+
+const CategoryChips = dynamic(() => import("./CategoryChips"), {
+  ssr: false,
+  loading: () => (
+    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 py-1">
+      {[...Array(8)].map((_, i) => (
+        <div key={i} className="h-10 w-24 animate-pulse rounded-2xl bg-white/10" />
+      ))}
+    </div>
+  ),
+});
 
 export default function HomeClient() {
   const { t } = useApp();
@@ -33,8 +45,10 @@ export default function HomeClient() {
 
   const [filters, setFilters] = useState({
     category: "All",
-    area: "All",
+    division: "All",
+    district: "All",
     payment: "Any",
+    radius: "Any",
     sort: "nearest",
   });
 
@@ -61,10 +75,13 @@ export default function HomeClient() {
     const norm = query.trim().toLowerCase();
     return allOffers.filter(
       (o) =>
-        o.title.toLowerCase().includes(norm) ||
-        o.shopName.toLowerCase().includes(norm) ||
-        o.category.toLowerCase().includes(norm) ||
-        o.area.toLowerCase().includes(norm)
+        (o.title || "").toLowerCase().includes(norm) ||
+        (o.shopName || "").toLowerCase().includes(norm) ||
+        (o.category || "").toLowerCase().includes(norm) ||
+        (o.district || "").toLowerCase().includes(norm) ||
+        (o.division || "").toLowerCase().includes(norm) ||
+        (o.area || "").toLowerCase().includes(norm) ||
+        (o.address || "").toLowerCase().includes(norm)
     );
   }, [query, allOffers]);
 
@@ -74,9 +91,21 @@ export default function HomeClient() {
     let list = baseList;
     if (filters.category !== "All")
       list = list.filter((o) => o.category === filters.category);
-    if (filters.area !== "All") list = list.filter((o) => o.area === filters.area);
+    if (filters.division !== "All")
+      list = list.filter((o) => o.division === filters.division);
+    if (filters.district !== "All")
+      list = list.filter((o) => o.district === filters.district);
     if (filters.payment !== "Any")
       list = list.filter((o) => o.paymentMethod === filters.payment);
+
+    // Apply radius filter when we know the user's location.
+    if (userCoords != null && filters.radius !== "Any") {
+      const km = Number(filters.radius);
+      list = list.filter((o) => {
+        const d = distanceToOffer(o, userCoords.lat, userCoords.lng);
+        return d != null && d <= km;
+      });
+    }
 
     const withDist = list.map((o) => ({
       ...o,
@@ -141,10 +170,34 @@ export default function HomeClient() {
 
   function handleNearMe(coords) {
     setUserCoords(coords);
+    setGeo(coords);
     setView("list");
     setSelectedMapId(null);
     document.getElementById("near-you")?.scrollIntoView({ behavior: "smooth" });
   }
+
+  // Ask for the user's location automatically once (per browser), and reuse
+  // a previously saved location if we have one.
+  useEffect(() => {
+    const saved = getGeo();
+    if (saved && saved.lat != null) {
+      setUserCoords(saved);
+    }
+    if (!wasAsked() && typeof navigator !== "undefined" && "geolocation" in navigator) {
+      markAsked();
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserCoords(coords);
+          setGeo(coords);
+        },
+        () => {
+          // denied or error — allow manual division/district selection
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+  }, []);
 
   function handleFirstSave() {
     setFireConfetti(true);

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { unmapOffer } from "@/lib/supabase";
 import { supabaseAdmin, hasAdminEnv } from "@/lib/supabaseAdmin";
-import { CATEGORIES, AREAS, AREA_COORDS, PAYMENT_METHODS } from "@/lib/offers";
+import { CATEGORIES, PAYMENT_METHODS } from "@/lib/offers";
+import { isInsideBangladesh } from "@/lib/bd-locations";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB
@@ -37,15 +38,21 @@ export async function POST(req) {
   }
 
   const str = (v) => (typeof v === "string" ? v.trim() : "");
+  const num = (v) => Number(v);
 
   const title = str(form.get("title"));
   const shopName = str(form.get("shop_name"));
   const discountText = str(form.get("discount_text"));
   const category = str(form.get("category"));
+  const division = str(form.get("division"));
+  const district = str(form.get("district"));
   const area = str(form.get("area"));
   const paymentMethod = str(form.get("payment_method"));
   const validTill = str(form.get("valid_till"));
   const description = str(form.get("description"));
+  const address = str(form.get("address"));
+  const lat = num(form.get("lat"));
+  const lng = num(form.get("lng"));
 
   // Validate required fields
   const missing = [];
@@ -53,7 +60,7 @@ export async function POST(req) {
   if (!shopName) missing.push("shop_name");
   if (!discountText) missing.push("discount_text");
   if (!category || !CATEGORIES.includes(category)) missing.push("category");
-  if (!area || !AREAS.includes(area)) missing.push("area");
+  if (!area) missing.push("area");
   if (!paymentMethod || !PAYMENT_METHODS.includes(paymentMethod)) missing.push("payment_method");
   if (!validTill) missing.push("valid_till");
   if (missing.length) {
@@ -67,8 +74,17 @@ export async function POST(req) {
     return NextResponse.json({ error: "Field too long" }, { status: 400 });
   }
 
-  // Auto-fill lat/lng from the area center.
-  const coords = AREA_COORDS[area];
+  // Validate coordinates are inside Bangladesh
+  if (
+    Number.isNaN(lat) ||
+    Number.isNaN(lng) ||
+    !isInsideBangladesh(lat, lng)
+  ) {
+    return NextResponse.json(
+      { error: "Location must be within Bangladesh." },
+      { status: 400 }
+    );
+  }
 
   // Optional photo upload
   let image = null;
@@ -109,8 +125,11 @@ export async function POST(req) {
     paymentMethod,
     validTill,
     description,
-    lat: coords.lat,
-    lng: coords.lng,
+    lat,
+    lng,
+    address,
+    division,
+    district,
     image: image || null,
     isFeatured: false,
     hotScore: 0,

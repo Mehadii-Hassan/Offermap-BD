@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "scrape": "node scripts/scrape.js",
+    "scrape:dry": "SCRAPE_DRY_RUN=true node scripts/scrape.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

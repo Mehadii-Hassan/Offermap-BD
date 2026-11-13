@@ -5,33 +5,25 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Search, LocateFixed, MapPin, ChevronDown, Plus } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { AREAS } from "@/lib/offers";
-
-function areaCoords(area) {
-  const map = {
-    Dhanmondi: { lat: 23.7461, lng: 90.3762 },
-    Gulshan: { lat: 23.7925, lng: 90.4064 },
-    Banani: { lat: 23.7937, lng: 90.4066 },
-    Uttara: { lat: 23.8759, lng: 90.3795 },
-    Mirpur: { lat: 23.8101, lng: 90.3559 },
-    Mohammadpur: { lat: 23.7657, lng: 90.3567 },
-    "Old Dhaka": { lat: 23.7100, lng: 90.4100 },
-  };
-  return map[area];
-}
+import { DIVISIONS } from "@/lib/offers";
 
 export default function Hero({ onSearch, onNearMe }) {
   const { t } = useApp();
   const [query, setQuery] = useState("");
   const [locating, setLocating] = useState(false);
   const [status, setStatus] = useState(null); // "success" | "denied"
-  const [showAreas, setShowAreas] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickDivision, setPickDivision] = useState("Dhaka");
+  const [pickDistrict, setPickDistrict] = useState("Dhaka");
   const dropdownRef = useRef(null);
+
+  const districts =
+    DIVISIONS.find((d) => d.name === pickDivision)?.districts || [];
 
   useEffect(() => {
     function handleClick(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setShowAreas(false);
+        setShowPicker(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -149,37 +141,77 @@ export default function Hero({ onSearch, onNearMe }) {
           {status === "denied" && (
             <div className="relative w-full max-w-sm" ref={dropdownRef}>
               <p className="mb-2 text-xs text-amber-300/90">{t.nearMeDenied}</p>
-              <button
-                onClick={() => setShowAreas((s) => !s)}
-                className="flex w-full items-center justify-between rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white hover:bg-white/15 transition"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <MapPin size={15} /> {t.allAreas}
-                </span>
-                <ChevronDown size={18} className={showAreas ? "rotate-180" : ""} />
-              </button>
-              {showAreas && (
-                <motion.ul
-                  initial={{ opacity: 0, scaleY: 0.95 }}
-                  animate={{ opacity: 1, scaleY: 1 }}
-                  className="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-white/15 bg-base py-1 shadow-2xl"
+              <div className="grid gap-2">
+                <button
+                  onClick={() => setShowPicker((s) => !s)}
+                  className="flex w-full items-center justify-between rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white hover:bg-white/15 transition"
                 >
-                  {AREAS.map((area) => (
-                    <li key={area}>
-                      <button
-                        onClick={() => {
-                          onNearMe(areaCoords(area));
-                          setShowAreas(false);
-                          setStatus("success");
-                        }}
-                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-white/80 hover:bg-white/10 hover:text-white transition"
-                      >
-                        <MapPin size={14} className="text-accent-orange" />
-                        {area}
-                      </button>
-                    </li>
-                  ))}
-                </motion.ul>
+                  <span className="inline-flex items-center gap-2">
+                    <MapPin size={15} /> {t.allDivisions}
+                  </span>
+                  <ChevronDown size={18} className={showPicker ? "rotate-180" : ""} />
+                </button>
+                {showPicker && (
+                  <motion.ul
+                    initial={{ opacity: 0, scaleY: 0.95 }}
+                    animate={{ opacity: 1, scaleY: 1 }}
+                    className="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-white/15 bg-base py-1 shadow-2xl"
+                  >
+{DIVISIONS.map((div) => (
+                      <li key={div.name}>
+                        <button
+                          onClick={() => {
+                            setPickDivision(div.name);
+                            setShowPicker(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-white/80 hover:bg-white/10 hover:text-white transition"
+                        >
+                          <MapPin size={14} className="text-accent-orange" />
+                          <span>{div.name}</span>
+                          <span className="text-white/50 text-xs ml-auto">{div.bn}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </motion.ul>
+                )}
+              </div>
+
+              {pickDivision && (
+                <div className="mt-2 grid gap-2">
+                  <button
+                    onClick={() => setShowPicker(false)}
+                    className="flex w-full items-center justify-between rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white hover:bg-white/15 transition"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <MapPin size={15} /> {t.allDistricts}
+                    </span>
+                    <ChevronDown size={18} className={showPicker ? "rotate-180" : ""} />
+                  </button>
+                  {showPicker && (
+                    <motion.ul
+                      initial={{ opacity: 0, scaleY: 0.95 }}
+                      animate={{ opacity: 1, scaleY: 1 }}
+                      className="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-white/15 bg-base py-1 shadow-2xl"
+                    >
+{DIVISIONS.find((d) => d.name === pickDivision)?.districts.map((dist) => (
+                      <li key={dist.name}>
+                        <button
+                          onClick={() => {
+                            onNearMe({ lat: dist.lat, lng: dist.lng });
+                            setShowPicker(false);
+                            setStatus("success");
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-white/80 hover:bg-white/10 hover:text-white transition"
+                        >
+                          <MapPin size={14} className="text-accent-orange" />
+                          <span>{dist.name}</span>
+                          <span className="text-white/50 text-xs ml-auto">{dist.bn}</span>
+                        </button>
+                      </li>
+                    ))}
+                    </motion.ul>
+                  )}
+                </div>
               )}
             </div>
           )}

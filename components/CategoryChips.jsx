@@ -26,7 +26,10 @@ export const CATEGORY_ICONS = {
 
 export default function CategoryChips({ active, onSelect }) {
   const { t } = useApp();
-  const items = [{ label: t.categoryAll, value: "All", icon: Sparkles }, ...CATEGORIES.map((c) => ({ label: c, value: c, icon: CATEGORY_ICONS[c] }))];
+  const items = [
+    { label: t.categoryAll, value: "All", icon: Sparkles },
+    ...CATEGORIES.map((c) => ({ label: c, value: c, icon: CATEGORY_ICONS[c] })),
+  ];
 
   return (
     <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 py-1">

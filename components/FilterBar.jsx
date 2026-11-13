@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { CATEGORIES, AREAS, PAYMENT_METHODS } from "@/lib/offers";
+import { CATEGORIES, PAYMENT_METHODS, DIVISIONS } from "@/lib/offers";
+
+const RADII = ["5", "10", "25", "50"];
 
 export default function FilterBar({ filters, onChange }) {
   const { t } = useApp();
@@ -13,6 +15,20 @@ export default function FilterBar({ filters, onChange }) {
 
   const selectCls =
     "w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-accent-purple";
+
+  const selectedDivision = DIVISIONS.find((d) => d.name === filters.division);
+  const districts = selectedDivision ? selectedDivision.districts : [];
+
+  function clear() {
+    onChange({
+      category: "All",
+      division: "All",
+      district: "All",
+      payment: "Any",
+      radius: "Any",
+      sort: "nearest",
+    });
+  }
 
   return (
     <div className="mb-6">
@@ -30,7 +46,7 @@ export default function FilterBar({ filters, onChange }) {
       </div>
 
       {open && (
-        <div className="mt-4 grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-white/50">
               {t.filterCategory}
@@ -53,19 +69,46 @@ export default function FilterBar({ filters, onChange }) {
 
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-white/50">
-              {t.filterArea}
+              {t.filterDivision}
             </span>
             <select
-              value={filters.area}
-              onChange={(e) => set("area", e.target.value)}
+              value={filters.division}
+              onChange={(e) =>
+                onChange({
+                  ...filters,
+                  division: e.target.value,
+                  district: "All",
+                })
+              }
               className={selectCls}
             >
               <option value="All" className="bg-base">
-                {t.allAreas}
+                {t.allDivisions}
               </option>
-              {AREAS.map((a) => (
-                <option key={a} value={a} className="bg-base">
-                  {a}
+              {DIVISIONS.map((d) => (
+                <option key={d.name} value={d.name} className="bg-base">
+                  {d.name} · {d.bn}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-white/50">
+              {t.filterDistrict}
+            </span>
+            <select
+              value={filters.district}
+              onChange={(e) => set("district", e.target.value)}
+              disabled={!selectedDivision}
+              className={`${selectCls} disabled:opacity-50`}
+            >
+              <option value="All" className="bg-base">
+                {t.allDistricts}
+              </option>
+              {districts.map((d) => (
+                <option key={d.name} value={d.name} className="bg-base">
+                  {d.name} · {d.bn}
                 </option>
               ))}
             </select>
@@ -83,6 +126,26 @@ export default function FilterBar({ filters, onChange }) {
               {PAYMENT_METHODS.map((p) => (
                 <option key={p} value={p} className="bg-base">
                   {p}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-white/50">
+              {t.filterRadius}
+            </span>
+            <select
+              value={filters.radius}
+              onChange={(e) => set("radius", e.target.value)}
+              className={selectCls}
+            >
+              <option value="Any" className="bg-base">
+                {t.radiusAny}
+              </option>
+              {RADII.map((r) => (
+                <option key={r} value={r} className="bg-base">
+                  {r} km
                 </option>
               ))}
             </select>
@@ -109,14 +172,14 @@ export default function FilterBar({ filters, onChange }) {
             </select>
           </label>
 
-          <button
-            onClick={() =>
-              onChange({ category: "All", area: "All", payment: "Any", sort: "nearest" })
-            }
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/10 transition !h-fit !mt-1 sm:!mt-0"
-          >
-            <X size={14} /> {t.clearFilters}
-          </button>
+          <div className="flex items-end">
+            <button
+              onClick={clear}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/10 transition"
+            >
+              <X size={14} /> {t.clearFilters}
+            </button>
+          </div>
         </div>
       )}
     </div>

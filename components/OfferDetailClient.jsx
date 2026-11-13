@@ -15,6 +15,7 @@ import {
   Flame,
   Share2,
   CreditCard,
+  Flag,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import {
@@ -40,6 +41,27 @@ export default function OfferDetailClient({ offer }) {
   });
   const [voting, setVoting] = useState(false);
   const [fireConfetti, setFireConfetti] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reported, setReported] = useState(false);
+
+  async function handleReport() {
+    if (reporting || reported) return;
+    setReporting(true);
+    try {
+      const res = await fetch("/api/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offer_id: offer.id, reason: "expired" }),
+      });
+      if (res.ok) {
+        setReported(true);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setReporting(false);
+    }
+  }
 
   function handleSave() {
     const wasSaved = saved;
@@ -173,7 +195,7 @@ export default function OfferDetailClient({ offer }) {
           </div>
 
           {/* Action buttons */}
-          <div className="mb-7 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="mb-7 grid grid-cols-1 gap-3 sm:grid-cols-4">
             <a
               href={directions}
               target="_blank"
@@ -198,6 +220,18 @@ export default function OfferDetailClient({ offer }) {
             >
               <Share2 size={16} /> {t.shareMessenger}
             </a>
+            <button
+              onClick={handleReport}
+              disabled={reporting || reported}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-bold transition ${
+                reported
+                  ? "bg-emerald-500/20 text-emerald-200 cursor-default"
+                  : "border border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/25 disabled:opacity-60"
+              }`}
+            >
+              <Flag size={16} />
+              {reported ? t.reportSuccess : reporting ? "..." : t.report}
+            </button>
           </div>
 
           {/* Worked / Didn't work */}

@@ -11,11 +11,12 @@ import {
   Star,
   Pencil,
   Save,
+  Trash,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { formatDate } from "@/lib/offers";
 
-const TABS = ["pending", "approved", "rejected"];
+const TABS = ["pending", "approved", "rejected", "scraped"];
 
 export default function AdminClient() {
   const { t } = useApp();
@@ -111,6 +112,19 @@ export default function AdminClient() {
     }
   }
 
+  async function deleteExpired() {
+    if (!window.confirm(t.adminDeleteExpired)) return;
+    setLoading(true);
+    try {
+      await fetch("/api/admin/offers/delete-expired", { method: "POST" });
+      await loadOffers();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function startEdit(o) {
     setEditingId(o.id);
     setEditForm({
@@ -135,7 +149,10 @@ export default function AdminClient() {
     total: offers.length,
   };
 
-  const filtered = offers.filter((o) => o.status === tab);
+  const filtered =
+    tab === "scraped"
+      ? offers.filter((o) => o.source === "scraper")
+      : offers.filter((o) => o.status === tab);
 
   // ---------- Login screen ----------
   if (authed === false) {
@@ -179,12 +196,21 @@ export default function AdminClient() {
         <h1 className="text-2xl font-black sm:text-3xl">
           <span className="text-gradient">{t.adminTitle}</span>
         </h1>
-        <button
-          onClick={logout}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 transition"
-        >
-          <LogOut size={15} /> {t.adminLogout}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={deleteExpired}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 bg-white/5 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/10 transition disabled:opacity-60"
+          >
+            <Trash size={15} /> {t.adminDeleteExpired}
+          </button>
+          <button
+            onClick={logout}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 transition"
+          >
+            <LogOut size={15} /> {t.adminLogout}
+          </button>
+        </div>
       </div>
 
       {/* Counts */}
@@ -224,7 +250,13 @@ export default function AdminClient() {
                 />
               )}
               <span className="relative">
-                {k === "pending" ? t.adminPending : k === "approved" ? t.adminApproved : t.adminRejected}
+                {k === "pending"
+                  ? t.adminPending
+                  : k === "approved"
+                    ? t.adminApproved
+                    : k === "rejected"
+                      ? t.adminRejected
+                      : t.adminScraped}
               </span>
             </button>
           );
