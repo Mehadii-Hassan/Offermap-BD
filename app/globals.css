@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --grad: linear-gradient(135deg, #ff7a18, #ff3d77, #a855f7);
+  /* Dark default */
+  --site-bg: #0b0812;
+  --site-bg-alt: #141021;
+  --bg-tint: #1a1230;
+  --card-bg: rgba(255, 255, 255, 0.05);
+  --card-border: rgba(255, 255, 255, 0.1);
+}
+
+html.light {
+  --site-bg: #f6f2fb;
+  --site-bg-alt: #ffffff;
+  --bg-tint: rgba(168, 85, 247, 0.08);
+  --card-bg: rgba(255, 255, 255, 0.7);
+  --card-border: rgba(20, 16, 33, 0.1);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+  background: var(--site-bg);
+  color: #fff;
+}
+html.light body {
+  color: #1e1b2e;
+}
+
+/* Dark mode default handled via .dark on <html> toggled by ThemeProvider */
+
+/* Gradient text helper */
+.text-gradient {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Glassmorphism card used across the app */
+.glass {
+  background: var(--card-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--card-border);
+}
+
+/* Light theme adjustments: flip text on white text elements to dark */
+html.light .text-white {
+  color: #1e1b2e;
+}
+html.light .text-white\/70,
+html.light .text-white\/60,
+html.light .text-white\/50,
+html.light .text-white\/40,
+html.light .text-white\/30,
+html.light .text-white\/80,
+html.light .text-white\/90 {
+  color: #3f3a55;
+}
+html.light .border-white\/10,
+html.light .border-white\/15 {
+  border-color: rgba(20, 16, 33, 0.12);
+}
+html.light .bg-white\/5,
+html.light .bg-white\/10 {
+  background-color: rgba(20, 16, 33, 0.05);
+}
+
+/* Soft glow on hover */
+.glow-hover {
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+.glow-hover:hover {
+  box-shadow: 0 0 34px -6px rgba(168, 85, 247, 0.5),
+    0 0 18px -4px rgba(255, 61, 119, 0.35);
+}
+
+/* Blob backgrounds */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  opacity: 0.4;
+  animation: blob 16s ease-in-out infinite;
+  pointer-events: none;
+}
+.blob-1 {
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(255, 122, 24, 0.7), transparent 70%);
+  top: -120px;
+  left: -100px;
+}
+.blob-2 {
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.6), transparent 70%);
+  top: 30%;
+  right: -120px;
+  animation-delay: -5s;
+}
+.blob-3 {
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(255, 61, 119, 0.55), transparent 70%);
+  bottom: -100px;
+  left: 20%;
+  animation-delay: -9s;
+}
+
+/* Dot noise overlay */
+.noise::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+      rgba(255, 255, 255, 0.04) 1px,
+      transparent 1px
+    );
+  background-size: 18px 18px;
+  z-index: 50;
+}
+
+/* Leaflet dark-mode friendly container */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  border-radius: 1rem;
+  z-index: 0;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 0.9rem;
+}
+.light .leaflet-container {
+  filter: none;
+}
+
+/* Hide scrollbars on horizontal chip rows */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Remove focus outline only for mouse users */
+@media (hover: hover) {
+  [data-mouse="true"] :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* Element scroll margin for sticky headers */
+section[id] {
+  scroll-margin-top: 6rem;
+}
+
+@layer components {
+  .tap-highlight {
+    @apply cursor-pointer select-none active:scale-95 transition;
+  }
+}

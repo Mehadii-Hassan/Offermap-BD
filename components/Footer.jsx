@@ -1,0 +1,68 @@
+"use client";
+
+import Link from "next/link";
+import { MapPin } from "lucide-react";
+import { useApp } from "@/lib/app-context";
+
+export default function Footer() {
+  const { t } = useApp();
+
+  const links = [
+    { href: "/", label: t.navHome },
+    { href: "/saved", label: t.navSaved },
+    { href: "/about", label: t.navAbout },
+    { href: "/contact", label: t.contactTitle },
+  ];
+  const legal = [
+    { href: "/privacy", label: t.privacyTitle },
+    { href: "/about", label: t.aboutTitle },
+  ];
+
+  return (
+    <footer className="mt-10 border-t border-white/10 py-10 pb-24 md:pb-10">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 md:grid-cols-4">
+        <div className="md:col-span-2">
+          <div className="flex items-center gap-2">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-tr from-accent-orange via-accent-pink to-accent-purple">
+              <MapPin size={18} className="text-white" />
+            </span>
+            <span className="text-lg font-extrabold">
+              OfferMap<span className="text-gradient"> BD</span>
+            </span>
+          </div>
+          <p className="mt-3 max-w-sm text-sm text-white/50">{t.tagline}</p>
+        </div>
+
+        <div>
+          <h4 className="font-semibold text-white/80">{t.links}</h4>
+          <ul className="mt-3 space-y-2 text-sm text-white/50">
+            {links.map((l) => (
+              <li key={l.href}>
+                <Link href={l.href} className="hover:text-white transition">
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h4 className="font-semibold text-white/80">{t.legal}</h4>
+          <ul className="mt-3 space-y-2 text-sm text-white/50">
+            {legal.map((l) => (
+              <li key={l.href}>
+                <Link href={l.href} className="hover:text-white transition">
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-6 text-xs text-white/30">{t.madeIn} 🇧🇩</p>
+        </div>
+      </div>
+      <div className="mx-auto mt-8 max-w-6xl border-t border-white/5 px-4 pt-6 text-center text-xs text-white/30">
+        © {new Date().getFullYear()} OfferMap BD. {t.rights}
+      </div>
+    </footer>
+  );
+}
