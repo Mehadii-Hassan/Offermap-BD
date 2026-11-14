@@ -108,14 +108,18 @@ const APP_CATEGORIES = [
   "Education & Courses",
   "Online Shopping",
   "Cashback & Wallet",
-  "Mobile Wallet Cashback",
 ];
 
 // Map a source-provided category to a known key, or "Other" when unknown.
 function normalizeCategory(c) {
   const key = String(c || "").trim();
+  const low = key.toLowerCase();
+  // Legacy/alternate names that should fold into the canonical cashback key.
+  if (/mobile wallet cashback|mobile wallets|cashback|wallet cashback/.test(low)) {
+    return "Cashback & Wallet";
+  }
   for (let i = 0; i < APP_CATEGORIES.length; i++) {
-    if (APP_CATEGORIES[i] === key) return key;
+    if (APP_CATEGORIES[i] === key || APP_CATEGORIES[i].toLowerCase() === low) return APP_CATEGORIES[i];
   }
   return "Other";
 }

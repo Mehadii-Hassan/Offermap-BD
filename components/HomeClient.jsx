@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
-import { List, Map as MapIcon } from "lucide-react";
+import { List, Map as MapIcon, X } from "lucide-react";
 import Hero from "./Hero";
 import FilterBar from "./FilterBar";
 import SectionHeading from "./SectionHeading";
@@ -89,12 +89,12 @@ export default function HomeClient() {
 
   const filteredList = useMemo(() => {
     let list = baseList;
-    if (filters.category !== "All")
-      list = list.filter((o) => o.category === filters.category);
+    if (activeCategory !== "All")
+      list = list.filter((o) => o.category === activeCategory);
     if (filters.division !== "All")
-      list = list.filter((o) => o.division === filters.division);
+      list = list.filter((o) => o.nationwide === true || o.division === filters.division);
     if (filters.district !== "All")
-      list = list.filter((o) => o.district === filters.district);
+      list = list.filter((o) => o.nationwide === true || o.district === filters.district);
     if (filters.payment !== "Any")
       list = list.filter((o) => o.paymentMethod === filters.payment);
 
@@ -131,43 +131,62 @@ export default function HomeClient() {
         });
     }
     return withDist;
-  }, [baseList, filters, userCoords]);
+  }, [baseList, filters, userCoords, activeCategory]);
 
   // Derive the curated sections from the single fetched list.
-  const hot = useMemo(
-    () => [...allOffers].sort((a, b) => b.hotScore - a.hotScore).slice(0, 8),
-    [allOffers]
-  );
-  const ending = useMemo(
-    () =>
-      [...allOffers]
-        .filter((o) => !o.isOngoing)
-        .sort((a, b) => new Date(a.validTill) - new Date(b.validTill))
-        .slice(0, 8),
-    [allOffers]
-  );
-  const topFive = useMemo(
-    () =>
-      [...allOffers]
-        .sort((a, b) => (b.viewsToday ?? 0) - (a.viewsToday ?? 0))
-        .slice(0, 5),
-    [allOffers]
-  );
-  const featured = useMemo(
-    () => allOffers.filter((o) => o.isFeatured).slice(0, 3),
-    [allOffers]
-  );
+  // Offer count per category (normalized) for the chips.
+const categoryCounts = useMemo(() => {
+  const m = {};
+  for (const o of allOffers) {
+    const k = o.category || "Other";
+    m[k] = (m[k] || 0) + 1;
+  }
+  return m;
+}, [allOffers]);
 
-  const nearOffers = useMemo(() => {
-    if (!userCoords) return [];
-    return [...allOffers]
-      .map((o) => ({
-        ...o,
-        distanceKm: distanceToOffer(o, userCoords.lat, userCoords.lng),
-      }))
-      .sort((a, b) => a.distanceKm - b.distanceKm)
-      .slice(0, 8);
-  }, [userCoords, allOffers]);
+// A category filter reused by all sections + lists.
+const appliesCategory = (o) =>
+  activeCategory === "All" || o.category === activeCategory;
+
+const hot = useMemo(
+  () => [...allOffers].filter(appliesCategory).sort((a, b) => b.hotScore - a.hotScore).slice(0, 8),
+  [allOffers, activeCategory]
+);
+const ending = useMemo(
+  () =>
+    [...allOffers]
+      .filter((o) => {
+        if (!appliesCategory(o)) return false;
+        return !o.isOngoing;
+      })
+      .sort((a, b) => new Date(a.validTill) - new Date(b.validTill))
+      .slice(0, 8),
+  [allOffers, activeCategory]
+);
+const topFive = useMemo(
+  () =>
+    [...allOffers]
+      .filter(appliesCategory)
+      .sort((a, b) => (b.viewsToday ?? 0) - (a.viewsToday ?? 0))
+      .slice(0, 5),
+  [allOffers, activeCategory]
+);
+const featured = useMemo(
+  () => allOffers.filter((o) => o.isFeatured && appliesCategory(o)).slice(0, 3),
+  [allOffers, activeCategory]
+);
+
+const nearOffers = useMemo(() => {
+  if (!userCoords) return [];
+  return [...allOffers]
+    .filter(appliesCategory)
+    .map((o) => ({
+      ...o,
+      distanceKm: distanceToOffer(o, userCoords.lat, userCoords.lng),
+    }))
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, 8);
+}, [userCoords, allOffers, activeCategory]);
 
   function handleNearMe(coords) {
     setUserCoords(coords);
@@ -205,13 +224,78 @@ export default function HomeClient() {
     setTimeout(() => setFireConfetti(false), 3000);
   }
 
+  // Keep the selected category in the URL so a refresh survives.
+  function syncUrl(category) {
+    const url = new URL(window.location.href);
+    if (category && category !== "All") url.searchParams.set("category", category);
+    else url.searchParams.delete("category");
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }
+
+  function handleCategorySelect(value) {
+    // Clicking the active chip (or "All") deselects the filter.
+    const next = value !== "All" && value === activeCategory ? "All" : value;
+    setActiveCategory(next);
+    setFilters((f) => ({ ...f, category: next === "All" ? "All" : next }));
+    syncUrl(next);
+    setQuery("");
+  }
+
+  const hasActiveFilters =
+    activeCategory !== "All" ||
+    filters.division !== "All" ||
+    filters.district !== "All" ||
+    filters.payment !== "Any" ||
+    filters.radius !== "Any";
+
+  const defaultFilters = {
+    category: "All",
+    division: "All",
+    district: "All",
+    payment: "Any",
+    radius: "Any",
+    sort: "nearest",
+  };
+
+  function clearFilters() {
+    setActiveCategory("All");
+    setFilters(defaultFilters);
+    setQuery("");
+    syncUrl(null);
+  }
+
+  // Read the ?category= param once on mount so refreshing keeps the selection.
+  useEffect(() => {
+    try {
+      const cat = new URL(window.location.href).searchParams.get("category");
+      if (cat && cat !== "All") setActiveCategory(cat);
+    } catch (e) {
+      /* ignore */
+    }
+  }, []);
+
   return (
     <>
       <Hero onSearch={setQuery} onNearMe={handleNearMe} />
 
       {/* Category chips */}
       <div className="mx-auto max-w-6xl px-4 py-3">
-        <CategoryChips active={activeCategory} onSelect={setActiveCategory} />
+        <CategoryChips
+          active={activeCategory}
+          onSelect={handleCategorySelect}
+          counts={categoryCounts}
+          total={allOffers.length}
+        />
+        {hasActiveFilters && (
+          <div className="mt-3 flex">
+            <button
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/10 hover:text-white transition"
+            >
+              <X size={13} /> {t.clearFilters}
+            </button>
+          </div>
+        )}
       </div>
 
       <main className="mx-auto max-w-6xl px-4 pb-24 md:pb-10">
@@ -249,7 +333,10 @@ export default function HomeClient() {
             filters={filters}
             onChange={(f) => {
               setFilters(f);
-              setActiveCategory(f.category);
+              if (f.category !== activeCategory) {
+                setActiveCategory(f.category);
+                syncUrl(f.category);
+              }
             }}
           />
         )}
@@ -276,7 +363,7 @@ export default function HomeClient() {
             {view === "map" ? (
               <div className="mb-10 rounded-2xl overflow-hidden border border-white/10">
                 <MapView
-                  offers={baseList}
+                  offers={filteredList}
                   userCoords={userCoords}
                   selectedId={selectedMapId}
                   onSelect={setSelectedMapId}
