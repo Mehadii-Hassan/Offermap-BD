@@ -5,7 +5,7 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { CATEGORIES, PAYMENT_METHODS, DIVISIONS } from "@/lib/offers";
 
-const RADII = ["5", "10", "25", "50"];
+const RADII = ["5", "10", "25", "50", "100"];
 
 export default function FilterBar({ filters, onChange }) {
   const { t } = useApp();

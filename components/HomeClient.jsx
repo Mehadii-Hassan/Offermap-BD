@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { List, Map as MapIcon, X } from "lucide-react";
@@ -21,6 +21,7 @@ import {
   discountValue,
 } from "@/lib/offers";
 import { getGeo, setGeo, wasAsked, markAsked } from "@/lib/geo";
+import { DIVISIONS, districtNames, districtInfo } from "@/lib/bd-locations";
 
 const CategoryChips = dynamic(() => import("./CategoryChips"), {
   ssr: false,
@@ -43,13 +44,19 @@ export default function HomeClient() {
   const [userCoords, setUserCoords] = useState(null);
   const [fireConfetti, setFireConfetti] = useState(false);
   const [selectedMapId, setSelectedMapId] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(24);
+  const [manualDiv, setManualDiv] = useState("Dhaka");
+  const [manualDist, setManualDist] = useState("");
+  const [locName, setLocName] = useState("");
+  const [showLocPicker, setShowLocPicker] = useState(false);
+  const sentinelRef = useRef(null);
 
   const [filters, setFilters] = useState({
     category: "All",
     division: "All",
     district: "All",
     payment: "Any",
-    radius: "Any",
+    radius: "25",
     sort: "nearest",
   });
 
@@ -70,6 +77,29 @@ export default function HomeClient() {
       active = false;
     };
   }, []);
+
+  // Effective radius: default 25 km, auto-widen to 50/100/200 when fewer than
+  // 10 offers fall inside the current radius (nationwide offers excluded).
+  const radiusInfo = useMemo(() => {
+    if (userCoords == null) return { radius: null, note: null };
+    const base = filters.radius === "Any" ? null : Number(filters.radius);
+    let radius = base != null ? base : 25;
+    const local = allOffers.filter((o) => !o.nationwide);
+    const countIn = (r) =>
+      local.filter(
+        (o) => (distanceToOffer(o, userCoords.lat, userCoords.lng) ?? Infinity) <= r
+      ).length;
+    if (countIn(radius) < 10) {
+      for (const r of [50, 100, 200]) {
+        if (countIn(r) >= 10 || r === 200) {
+          radius = r;
+          break;
+        }
+      }
+    }
+    const note = base != null && radius !== base ? radius : base == null ? radius : null;
+    return { radius, note };
+  }, [userCoords, allOffers, filters.radius]);
 
   const searchRes = useMemo(() => {
     if (!query.trim()) return null;
@@ -99,51 +129,60 @@ export default function HomeClient() {
     if (filters.payment !== "Any")
       list = list.filter((o) => o.paymentMethod === filters.payment);
 
-    // Apply radius filter when we know the user's location.
-    if (userCoords != null && filters.radius !== "Any") {
-      const km = Number(filters.radius);
-      list = list.filter((o) => {
-        const d = distanceToOffer(o, userCoords.lat, userCoords.lng);
-        return d != null && d <= km;
-      });
-    }
-
     const withDist = list.map((o) => ({
       ...o,
       distanceKm:
         userCoords != null ? distanceToOffer(o, userCoords.lat, userCoords.lng) : null,
     }));
 
-    switch (filters.sort) {
-      case "ending":
-        withDist.sort(
-          (a, b) => new Date(a.validTill) - new Date(b.validTill)
-        );
-        break;
-      case "discount":
-        withDist.sort((a, b) => discountValue(b) - discountValue(a));
-        break;
-      case "nearest":
-      default:
-        withDist.sort((a, b) => {
-          if (a.distanceKm != null && b.distanceKm != null)
-            return a.distanceKm - b.distanceKm;
-          return b.isFeatured - a.isFeatured || b.hotScore - a.hotScore;
-        });
+    if (userCoords != null) {
+      // Nearby (within radius, nearest first), then nationwide offers last.
+      const nearby = [];
+      const nationwide = [];
+      for (const o of withDist) {
+        if (o.nationwide === true) {
+          nationwide.push(o);
+          continue;
+        }
+        const d = o.distanceKm ?? Infinity;
+        if (filters.radius !== "Any" && d > radiusInfo.radius) continue;
+        nearby.push(o);
+      }
+      nearby.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+      list = [...nearby, ...nationwide];
+    } else {
+      list = withDist;
+      switch (filters.sort) {
+        case "ending":
+          list.sort((a, b) => new Date(a.validTill) - new Date(b.validTill));
+          break;
+        case "discount":
+          list.sort((a, b) => discountValue(b) - discountValue(a));
+          break;
+        case "nearest":
+        default:
+          list.sort((a, b) => b.isFeatured - a.isFeatured || b.hotScore - a.hotScore);
+      }
     }
-    return withDist;
-  }, [baseList, filters, userCoords, activeCategory]);
+    return list;
+  }, [baseList, filters, userCoords, activeCategory, radiusInfo.radius]);
 
   // Derive the curated sections from the single fetched list.
   // Offer count per category (normalized) for the chips.
 const categoryCounts = useMemo(() => {
   const m = {};
+  const inRadius = (o) => {
+    if (o.nationwide === true) return true;
+    if (userCoords == null || radiusInfo.radius == null) return true;
+    return (distanceToOffer(o, userCoords.lat, userCoords.lng) ?? Infinity) <= radiusInfo.radius;
+  };
   for (const o of allOffers) {
+    if (!inRadius(o)) continue;
     const k = o.category || "Other";
     m[k] = (m[k] || 0) + 1;
   }
   return m;
-}, [allOffers]);
+}, [allOffers, userCoords, radiusInfo.radius]);
 
 // A category filter reused by all sections + lists.
 const appliesCategory = (o) =>
@@ -192,9 +231,23 @@ const nearOffers = useMemo(() => {
   function handleNearMe(coords) {
     setUserCoords(coords);
     setGeo(coords);
+    setLocName("");
+    setShowLocPicker(false);
     setView("list");
     setSelectedMapId(null);
     document.getElementById("near-you")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  // Manual Division -> District selection (used when GPS is denied/absent).
+  function applyManualLocation() {
+    const info = districtInfo(manualDist || manualDiv);
+    if (!info) return;
+    setUserCoords({ lat: info.lat, lng: info.lng });
+    setGeo({ lat: info.lat, lng: info.lng });
+    setLocName(manualDist || manualDiv);
+    setShowLocPicker(false);
+    setView("list");
+    setSelectedMapId(null);
   }
 
   // Ask for the user's location automatically once (per browser), and reuse
@@ -254,7 +307,7 @@ const nearOffers = useMemo(() => {
     division: "All",
     district: "All",
     payment: "Any",
-    radius: "Any",
+    radius: "25",
     sort: "nearest",
   };
 
@@ -275,9 +328,86 @@ const nearOffers = useMemo(() => {
     }
   }, []);
 
+  // Paginate the list 24 at a time; reset when filters/location change.
+  useEffect(() => {
+    setVisibleCount(24);
+  }, [userCoords, filters, activeCategory, searchRes != null]);
+
+  const visibleList = filteredList.slice(0, visibleCount);
+
+  // Infinite scroll: when the sentinel enters the view, reveal 24 more.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && visibleCount < filteredList.length) {
+          setVisibleCount((n) => n + 24);
+        }
+      },
+      { rootMargin: "300px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [visibleCount, filteredList.length]);
+
   return (
     <>
       <Hero onSearch={setQuery} onNearMe={handleNearMe} />
+
+      {/* Location bar */}
+      <div className="mx-auto max-w-6xl px-4 pt-3">
+        {!showLocPicker ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white/70">
+            <span>📍</span>
+            <span>
+              {userCoords != null ? `${t.yourLocation}: ${locName || t.nearYouDerived}` : `${t.setYourLocation}`}
+            </span>
+            <button
+              onClick={() => setShowLocPicker(true)}
+              className="ml-auto rounded-lg border border-white/15 px-2.5 py-1 text-xs font-semibold text-white/70 hover:bg-white/10 transition"
+            >
+              {t.change}
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
+            <div className="mb-2 font-semibold text-white/80">{t.chooseLocation}</div>
+            <div className="flex flex-wrap items-end gap-2">
+              <select
+                value={manualDiv}
+                onChange={(e) => { setManualDiv(e.target.value); setManualDist(""); }}
+                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+              >
+                {DIVISIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <select
+                value={manualDist}
+                onChange={(e) => setManualDist(e.target.value)}
+                className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+              >
+                <option value="">{t.chooseDistrict}</option>
+                {districtNames(manualDiv).map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <button
+                onClick={applyManualLocation}
+                disabled={!manualDist}
+                className="rounded-lg bg-gradient-to-tr from-accent-orange to-accent-pink px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {t.applyLocation}
+              </button>
+              {userCoords != null && (
+                <button
+                  onClick={() => setShowLocPicker(false)}
+                  className="rounded-lg border border-white/15 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+                >
+                  {t.cancel}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Category chips */}
       <div className="mx-auto max-w-6xl px-4 py-3">
@@ -448,23 +578,47 @@ const nearOffers = useMemo(() => {
 
                 {/* Filtered results / all deals */}
                 <div className="mb-10">
-                  <SectionHeading emoji="✨" title={`${filteredList.length} ${t.results}`} />
+                  <SectionHeading
+                    emoji="✨"
+                    title={
+                      userCoords != null && radiusInfo.radius != null
+                        ? `${filteredList.length} ${t.results} · ${filteredList.filter((o) => !o.nationwide).length} ${t.within} ${radiusInfo.radius} ${t.kmAway}`
+                        : `${filteredList.length} ${t.results}`
+                    }
+                  />
+                  {radiusInfo.note != null && (
+                    <p className="mb-4 text-sm font-semibold text-amber-300">
+                      {t.showingWithin} {radiusInfo.radius} {t.kmAway}
+                    </p>
+                  )}
                   {loading ? (
                     <GridSkeleton />
-                  ) : filteredList.length === 0 ? (
+                  ) : visibleList.length === 0 ? (
                     <EmptyState />
                   ) : (
-                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                      {filteredList.map((o, i) => (
-                        <OfferCard
-                          key={o.id}
-                          offer={o}
-                          index={i}
-                          distanceKm={o.distanceKm}
-                          onFirstSave={handleFirstSave}
-                        />
-                      ))}
-                    </div>
+                    <>
+                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                        {visibleList.map((o, i) => (
+                          <OfferCard
+                            key={o.id}
+                            offer={o}
+                            index={i}
+                            distanceKm={o.distanceKm}
+                            onFirstSave={handleFirstSave}
+                          />
+                        ))}
+                      </div>
+                      {visibleCount < filteredList.length && (
+                        <div ref={sentinelRef} className="mt-8 flex justify-center">
+                          <button
+                            onClick={() => setVisibleCount((n) => n + 24)}
+                            className="rounded-xl border border-white/15 bg-white/5 px-6 py-3 text-sm font-bold text-white/80 hover:bg-white/10 transition"
+                          >
+                            {t.loadMore}
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </>
