@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { formatDate } from "@/lib/offers";
+import OfferImage from "./OfferImage";
 
 const TABS = ["pending", "approved", "rejected", "scraped"];
 
@@ -280,11 +281,10 @@ export default function AdminClient() {
                 className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5"
               >
                 <div className="flex">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={o.image}
-                    alt={o.title}
-                    className="h-28 w-28 shrink-0 object-cover sm:h-32 sm:w-40"
+                  <OfferImage
+                    offer={o}
+                    urlClassName="h-28 w-28 shrink-0 object-cover sm:h-32 sm:w-40"
+                    placeholderClassName="h-28 w-28 shrink-0 sm:h-32 sm:w-40"
                   />
                   <div className="min-w-0 flex-1 p-3">
                     <div className="font-bold leading-snug">{o.title}</div>

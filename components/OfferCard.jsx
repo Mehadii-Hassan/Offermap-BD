@@ -15,6 +15,7 @@ import {
 import { useApp } from "@/lib/app-context";
 import { formatDistance } from "@/lib/offers";
 import Countdown from "./Countdown";
+import OfferImage from "./OfferImage";
 import { getSavedIds, toggleSavedId } from "@/lib/storage";
 
 export function isEndingSoon(offer) {
@@ -61,12 +62,10 @@ export default function OfferCard({
       >
         {/* Image */}
         <div className="relative h-44 w-full overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={offer.image}
-            alt={`${offer.title} at ${offer.shopName}`}
-            loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          <OfferImage
+            offer={offer}
+            urlClassName="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            placeholderClassName="h-full w-full"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 

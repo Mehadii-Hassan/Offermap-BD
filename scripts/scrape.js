@@ -267,6 +267,7 @@ async function tavilySearch(query) {
       api_key: TAVILY_API_KEY,
       query,
       depth: TAVILY_DEPTH,
+      include_images: true,
       start_url: "https://www.google.com/maps",
       include_answer: false,
       include_raw_content: false,
@@ -279,15 +280,17 @@ async function tavilySearch(query) {
   }
   const data = await res.json();
   const results = data.results || [];
-  return results
-    .map((r) => ({
-      url: r.url,
-      title: r.title || "",
-      content: r.content || "",
-      published_date: r.published_date || "",
-    }))
-    .filter((r) => r.title && r.content);
-}
+  return {
+    results: results
+      .map((r) => ({
+        url: r.url,
+        title: r.title || "",
+        content: r.content || "",
+        published_date: r.published_date || "",
+      }))
+      .filter((r) => r.title && r.content),
+    images: data.images || [],
+  };
 
 async function geminiExtract(query, results) {
   if (geminiRateLimited || geminiCalls >= MAX_PAGES_PER_RUN) return [];
@@ -466,6 +469,110 @@ async function resolveLocation(o) {
   };
 }
 
+// ---------- Image resolution helpers ----------
+
+const USER_AGENT = "OfferMapBD/1.0 (offer scraper; mailto:contact@offermap-bd.example.com)";
+
+function hostname(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function resolveRelative(url, base) {
+  try {
+    return new URL(url, base).href;
+  } catch {
+    return "";
+  }
+}
+
+function isValidImageCandidate(url) {
+  if (!/^https:\/\//i.test(url)) return false;
+  const low = url.toLowerCase();
+  if (low.includes("logo") || low.includes("favicon")) return false;
+  return true;
+}
+
+// Polite fetch of the source page HTML (UA, 8s timeout, ~1 req/s).
+async function fetchPageHtml(sourceUrl) {
+  if (!sourceUrl || !/^https:\/\//i.test(sourceUrl)) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(sourceUrl, {
+      headers: { "User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml" },
+      signal: ctrl.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const type = (res.headers.get("content-type") || "").toLowerCase();
+    if (!type.includes("text/html") && !type.includes("application/xhtml")) return null;
+    const text = await res.text();
+    return text.length > 1_000_000 ? text.slice(0, 1_000_000) : text;
+  } catch {
+    return null;
+  }
+}
+
+// Read og:image then twitter:image from HTML, resolving relative URLs.
+function metaImageFromHtml(html, sourceUrl) {
+  if (!html) return "";
+  const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+  const twitter = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
+  const raw = (og && og[1]) || (twitter && twitter[1]) || "";
+  if (!raw) return "";
+  const out = /^\s*(https?:)?\/\//i.test(raw) ? resolveRelative(raw, sourceUrl) : resolveRelative(raw, sourceUrl);
+  return isValidImageCandidate(out) ? out : "";
+}
+
+// Validate an image URL: HEAD/GET returns 200 and content-type image/*, not a
+// tiny icon (no "logo"/"favicon", and content-length not suspiciously small).
+async function validateImageUrl(url) {
+  if (!isValidImageCandidate(url)) return false;
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { "User-Agent": USER_AGENT },
+      redirect: "follow",
+    });
+    if (!res.ok) return false;
+    const type = (res.headers.get("content-type") || "").toLowerCase();
+    if (!type.startsWith("image/")) return false;
+    const len = res.headers.get("content-length");
+    if (len && Number(len) < 2048) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Pick the best image for an offer in priority order:
+//   a. Gemini imageUrl (full https)   b. source page og/twitter:image
+//   c. Tavily query images on the same domain as the source page.
+// Returns a validated https URL or null.
+async function resolveImage(o, tavilyImages) {
+  if (o.imageUrl && /^https:\/\//i.test(o.imageUrl) && await validateImageUrl(o.imageUrl)) {
+    return o.imageUrl;
+  }
+  if (o.sourceUrl && /^https:\/\//i.test(o.sourceUrl)) {
+    const html = await fetchPageHtml(o.sourceUrl);
+    const meta = metaImageFromHtml(html, o.sourceUrl);
+    if (meta && (await validateImageUrl(meta))) return meta;
+  }
+  const domain = hostname(o.sourceUrl);
+  if (domain) {
+    for (let i = 0; i < (tavilyImages || []).length; i++) {
+      const img = tavilyImages[i];
+      if (img && hostname(img) === domain && (await validateImageUrl(img))) return img;
+    }
+  }
+  return null;
+}
+
 // True if discount_text carries a real value (% amount, BDT/Tk/৳ price, or a
 // freebie/BOGO/cashback). Plain "Special Offer" or "Discount" with no number
 // or freebie is treated as a vague discount.
@@ -518,7 +625,7 @@ async function scrapeQuery(query) {
   if (geminiRateLimited || geminiCalls >= MAX_PAGES_PER_RUN) {
     return { offers: [], skipped: [], stopped: geminiRateLimited ? "rate_limited" : "budget_exhausted" };
   }
-  const results = await tavilySearch(query);
+  const { results, images } = await tavilySearch(query);
   const rawOffers = await geminiExtract(query, results);
   const publishedByUrl = {};
   for (const r of results) {
@@ -583,6 +690,12 @@ async function scrapeQuery(query) {
     if (loc.addressApproximate) {
       if (addressText) addressText += " ";
       addressText += "(approximate location)";
+    }
+    // Resolve + validate an image (best effort, never fatal).
+    try {
+      o.imageUrl = (await resolveImage(o, images)) || "";
+    } catch {
+      o.imageUrl = o.imageUrl && /^https:\/\//i.test(o.imageUrl) ? o.imageUrl : "";
     }
     offers.push({
       ...o,

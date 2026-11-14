@@ -12,6 +12,7 @@ import MapView from "./MapView";
 import Confetti from "./Confetti";
 import { GridSkeleton } from "./Skeletons";
 import EmptyState from "./EmptyState";
+import OfferImage from "./OfferImage";
 import AdSlot from "./AdSlot";
 import { useApp } from "@/lib/app-context";
 import {
@@ -507,12 +508,10 @@ function TopStrip({ offer, rank }) {
           className="flex h-full w-full items-center gap-3 rounded-2xl glass p-3 glow-hover"
         >
           <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-xl">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={offer.image}
-              alt={offer.title}
-              loading="lazy"
-              className="h-full w-full object-cover"
+            <OfferImage
+              offer={offer}
+              urlClassName="h-full w-full object-cover"
+              placeholderClassName="h-full w-full"
             />
             <span className="absolute -left-1 -top-1">
               <span className="grid h-6 w-6 place-items-center rounded-full bg-gradient-to-tr from-accent-orange to-accent-pink text-xs font-bold">

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useApp } from "@/lib/app-context";
 import { formatDistance } from "@/lib/offers";
 import { isEndingSoon } from "./OfferCard";
+import OfferImage from "./OfferImage";
 
 // Fix default marker icon path resolution in bundlers
 delete L.Icon.Default.prototype._getIconUrl;
@@ -60,6 +61,13 @@ export default function LeafletMap({ offers, userCoords, selectedId, onSelect })
         >
           <Popup>
             <div className="min-w-[180px]">
+              <div className="mb-1 h-20 w-full overflow-hidden rounded-lg">
+                <OfferImage
+                  offer={offer}
+                  urlClassName="h-full w-full object-cover"
+                  placeholderClassName="h-full w-full"
+                />
+              </div>
               <div className="mb-1 text-xs text-gray-600">
                 {offer.shopName} · {offer.area}
               </div>

@@ -31,6 +31,7 @@ import Countdown from "./Countdown";
 import MapView from "./MapView";
 import { getSavedIds, toggleSavedId, getVotedType, setVotedType } from "@/lib/storage";
 import Confetti from "./Confetti";
+import OfferImage from "./OfferImage";
 
 export default function OfferDetailClient({ offer }) {
   const { t } = useApp();
@@ -128,11 +129,11 @@ export default function OfferDetailClient({ offer }) {
       >
         {/* Image */}
         <div className="relative h-64 sm:h-80">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={offer.image}
-            alt={`${offer.title} at ${offer.shopName}`}
-            className="h-full w-full object-cover"
+          <OfferImage
+            offer={offer}
+            eager
+            urlClassName="h-full w-full object-cover"
+            placeholderClassName="h-full w-full"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
 
@@ -185,6 +186,19 @@ export default function OfferDetailClient({ offer }) {
 
         {/* Body */}
         <div className="p-5 sm:p-7">
+          {offer.source === "scraper" && offer.image && offer.sourceUrl && (
+            <div className="mb-4 text-right text-[11px] text-white/40">
+              {t.imageCredit}{" "}
+              <a
+                href={offer.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-white/70"
+              >
+                {offer.sourceUrl.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0]}
+              </a>
+            </div>
+          )}
           {offer.address && (
             <div className="mb-6 flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">
               <MapPin size={16} className="mt-0.5 shrink-0 text-accent-orange" />
