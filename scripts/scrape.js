@@ -39,7 +39,9 @@ const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL ||
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const DRY_RUN = process.env.SCRAPE_DRY_RUN === "true";
+const DRY_RUN = ["1", "true", "yes"].includes(
+  String(process.env.DRY_RUN === undefined ? process.env.SCRAPE_DRY_RUN : process.env.DRY_RUN).toLowerCase()
+);
 const REPORT_FILE = join(tmpdir(), "scrape-report.json");
 // Real runs default to 30 queries; MAX_QUERIES_PER_RUN=3 is a quick test.
 const MAX_QUERIES_PER_RUN = Number(
@@ -280,6 +282,7 @@ Extract at most 3 unique deals from these results. For each deal return a JSON o
 - paymentMethod: Any or one of City Bank Card, bKash, Nagad, Rocket
 - validTill: the offer END date as YYYY-MM-DD, or null (see rules below)
 - ongoing: true if the page says the offer is ongoing / limited time / while stock lasts / "চলছে" / "চলমান" with no fixed end date; otherwise false
+- bangladesh_offer: true ONLY if the offer is clearly for customers in Bangladesh — a Bangladeshi shop/brand/outlet, a Bangladeshi bank or wallet (bKash/Nagad/Rocket/City/DBBL...), a Bangladeshi website, or prices in BDT/৳/Tk. FALSE for foreign sites and global booking/travel/software/course platforms (e.g. Expedia, Hotwire, Coursera, Scrimba) or anything priced in $, £, € only or with US/UK-only terms.
 - imageUrl: the best product/offer image url if available, else empty string
 - sourceUrl: the source url
 
@@ -289,6 +292,10 @@ validTill rules (use today ${todayDateStr()} as the reference date):
 - If there is NO end date, set validTill to null.
 - NEVER invent an end date. If the page supports an ongoing offer (no end date but "ongoing"/"limited time"/"while stock lasts"/"চলছে"/"চলমান"), set validTill null and ongoing true.
 - If there is no end date and no ongoing sign, set validTill null and ongoing false.
+
+Bangladesh rules:
+- Set bangladesh_offer=true ONLY as described above. A generic article or listicle that is not one Bangladeshi shop's offer is NOT a valid offer.
+- Discount sanity: a discount of more than 90% is suspicious — mark it invalid unless it is a clear "Buy 1 Get 1" / BOGO style. Return discountText as written, and we will sanity-check it.
 
 Return ONLY valid JSON (no markdown) as an array of objects. If nothing usable is found, return [].
 
@@ -306,6 +313,7 @@ JSON response format:
     "paymentMethod": "...",
     "validTill": "YYYY-MM-DD",
     "ongoing": false,
+    "bangladesh_offer": true,
     "imageUrl": "...",
     "sourceUrl": "..."
   }
@@ -419,6 +427,24 @@ async function resolveLocation(o) {
   };
 }
 
+// Sanity checks for Bangladesh-only + believable discounts. Returns a skip
+// reason or null.
+function sanityCheckOffer(o) {
+  // Must clearly be a Bangladesh offer.
+  if (o.bangladesh_offer !== true) return "not Bangladesh";
+  const discountText = String(o.discountText || "").toLowerCase();
+  const m = discountText.match(/(\d+)\s*%/);
+  const pct = m ? parseInt(m[1], 10) : 0;
+  const isBogo = /buy 1 get 1|bogo|b1g1|get one free|2 for 1/i.test(discountText);
+  if (pct > 90 && !isBogo) return "bad discount";
+  // Skip generic articles / lists that aren't one shop's offer.
+  const titleShop = `${o.title} ${o.shopName}`.toLowerCase();
+  if (/(top \d+|best \d+|roundup|round-up|listicle|ultimate guide|checklist|n things|ways to|how to choose)/.test(titleShop)) {
+    return "bad discount";
+  }
+  return null;
+}
+
 async function scrapeQuery(query) {
   if (geminiRateLimited || geminiCalls >= MAX_PAGES_PER_RUN) {
     return { offers: [], skipped: [], stopped: geminiRateLimited ? "rate_limited" : "budget_exhausted" };
@@ -442,6 +468,19 @@ async function scrapeQuery(query) {
         rawValidTill: o.validTill,
         ongoing: o.ongoing === true,
         reason: loc.skip,
+      });
+      continue;
+    }
+    // Bangladesh-only + discount sanity checks.
+    const sanitySkip = sanityCheckOffer(o);
+    if (sanitySkip) {
+      skipped.push({
+        title: o.title,
+        shopName: o.shopName,
+        url: o.sourceUrl,
+        rawValidTill: o.validTill,
+        ongoing: o.ongoing === true,
+        reason: sanitySkip,
       });
       continue;
     }
@@ -593,7 +632,7 @@ async function upsertOffers(offersToInsert) {
 
 async function main() {
   console.log(
-    `🚀 Scrape run started (mode: ${DRY_RUN ? "DRY_RUN" : "LIVE"}, queries: ${MAX_QUERIES_PER_RUN})`
+    `🚀 Scrape run started (mode: ${DRY_RUN ? "DRY RUN (nothing is saved)" : "LIVE"}, queries: ${MAX_QUERIES_PER_RUN})`
   );
 
   // Auto-advance the query pool daily, with no DB table and no required env.
@@ -638,7 +677,7 @@ async function main() {
       offersFound: 0,
       offersInserted: 0,
       skipped: 0,
-      skipReasons: { "no end date": 0, expired: 0, "unknown district": 0, "missing field": 0, duplicate: 0 },
+      skipReasons: { "no end date": 0, expired: 0, "unknown district": 0, "missing field": 0, duplicate: 0, "not Bangladesh": 0, "bad discount": 0 },
       exactLocation: 0,
       districtCenter: 0,
     },

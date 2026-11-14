@@ -55,6 +55,13 @@ Discover discounts, deals and hot offers **near your location** across Banglades
    > ```bash
    > npm run clean-samples
    > ```
+   > To delete ALL auto-scraped offers and clear their `scrape_log` (so those pages are
+   > re-processed), preview first, then confirm with `--yes`:
+   > ```bash
+   > npm run reset-scraped          # preview only
+   > npm run reset-scraped -- --yes # actually deletes
+   > ```
+   > `reset-scraped` only touches `source = 'scraper'` offers and never `source = 'user'`.
 
 4. **Run**
    ```bash
@@ -103,7 +110,9 @@ offermap-bd/
 │  └─ offers.json               # Backup of the 30 sample offers (seeded via npm run seed)
 ├─ scripts/
 │  ├─ seed.js                   # Reads offers.json → inserts as approved
-│  └─ scrape.js                 # Tavily + Gemini + Nominatim scraper → pending offers
+│  ├─ clean-samples.js          # Deletes only the 30 seeded samples
+│  ├─ reset-scraped.js          # Deletes all scraped offers + clears scrape_log (needs --yes)
+│  └─ scrape.js                 # Tavily + Gemini + Nominatim scraper → auto-publishes offers
 ├─ lib/
 │  ├─ offers.js                 # ⭐ ONLY place that reads offer data
 │  ├─ supabase.js               # public + admin clients, row mapping
@@ -173,7 +182,8 @@ Division → District dropdowns cover all of Bangladesh (8 divisions, 64 distric
 - Offers are **upserted** into Supabase by **`dedupe_key`** (unique constraint required) via `onConflict: 'dedupe_key'`, so re-runs don't create duplicates.
 - **Query rotation**: a query pool (English + Bengali, built programmatically from 13 categories × 30 locations = ~780 queries, shuffled with a fixed seed) **auto-advances daily** with no DB table and no required env — `dayNumber * MAX_QUERIES_PER_RUN % poolLength`, wrapping at the end. `SCRAPE_QUERY_START` is an optional manual override if set.
 - **Free-tier safety**: `MAX_QUERIES_PER_RUN` defaults to **30** (set `3` for a quick test), `MAX_PAGES_PER_RUN` defaults to **60** to cap Gemini calls, and a small delay runs between Gemini calls. If Gemini returns **429**, the script stops Gemini work for that run, saves what's already done, and prints a clear warning instead of crashing.
-- **Report** includes pool total, queries run today, days for a full rotation, Tavily searches and Gemini calls used, offers found / inserted / skipped with a per-reason count (`no end date` / `expired` / `unknown district` / `missing field` / `duplicate`), and how many used an exact location vs the district center. The console prints the first 5 offers and up to 5 skipped offers (title, shop, raw `valid_till`, ongoing flag, reason).
+- **Bangladesh-only filter**: Gemini returns `bangladesh_offer=true` only for clearly-Bangladesh offers (local shop/brand, BD bank/wallet, BD site, BDT/৳/Tk prices). Foreign/global pages and anything priced in $, £, € only are skipped with `not Bangladesh`. Discount sanity skips `bad discount` for >90% offers (unless BOGO) or generic article/listicle titles.
+- **Report** includes pool total, queries run today, days for a full rotation, Tavily searches and Gemini calls used, offers found / inserted / skipped with a per-reason count (`no end date` / `expired` / `unknown district` / `missing field` / `duplicate` / `not Bangladesh` / `bad discount`), and how many used an exact location vs the district center. The console prints the first 5 offers and up to 5 skipped offers (title, shop, raw `valid_till`, ongoing flag, reason).
 - **`SCRAPE_DRY_RUN=true`** writes nothing — it only builds the report.
 - A JSON report is written to the OS temp dir (e.g. `%TEMP%\scrape-report.json` on Windows, `/tmp/scrape-report.json` on Linux; uploaded as a GitHub Actions artifact).
 
