@@ -12,6 +12,7 @@ export default function Footer() {
     { href: "/saved", label: t.navSaved },
     { href: "/about", label: t.navAbout },
     { href: "/contact", label: t.contactTitle },
+    { href: "/for-shops", label: t.forShops },
   ];
   const legal = [
     { href: "/privacy", label: t.privacyTitle },

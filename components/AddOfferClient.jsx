@@ -91,6 +91,8 @@ export default function AddOfferClient() {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoError, setPhotoError] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const scanInputRef = useRef(null);
 
   const [mapCenter, setMapCenter] = useState(DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(12);
@@ -285,6 +287,48 @@ export default function AddOfferClient() {
     setError("");
   }, [setLocation]);
 
+  // AI fill: upload a photo/screenshot, server reads it with Gemini and
+  // prefills the form fields so the user only verifies and submits.
+  async function handleScanFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+    setScanning(true);
+    try {
+      const fd = new FormData();
+      fd.set("image", file);
+      const res = await fetch("/api/scan-offer", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.fields) {
+        setError(data.error || "AI could not read this image.");
+        return;
+      }
+      const f = data.fields;
+      if (f.title) setFormTitle(f.title);
+      if (f.shopName) setFormShopName(f.shopName);
+      if (f.discountText) setFormDiscount(f.discountText);
+      if (f.category && f.category !== "Other") setFormCategory(f.category);
+      if (f.area) setFormArea(f.area);
+      if (f.validTill) setFormValidTill(f.validTill);
+      if (f.description) setFormDescription(f.description);
+      if (f.address) setFormAddress(f.address);
+      if (f.lat != null && f.lng != null) {
+        setFormLat(f.lat);
+        setFormLng(f.lng);
+        setMarkerLat(f.lat);
+        setMarkerLng(f.lng);
+        setMapCenter({ lat: f.lat, lng: f.lng });
+        setMapZoom(14);
+      }
+    } catch (err) {
+      console.error(err);
+      setError("AI fill failed. Please try again or fill the form manually.");
+    } finally {
+      setScanning(false);
+    }
+  }
+
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
@@ -383,6 +427,28 @@ export default function AddOfferClient() {
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <input
+            ref={scanInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleScanFile}
+          />
+          <button
+            type="button"
+            onClick={() => scanInputRef.current && scanInputRef.current.click()}
+            disabled={scanning}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-accent-purple/50 bg-accent-purple/10 px-4 py-4 text-sm font-semibold text-accent-purple hover:bg-accent-purple/20 transition disabled:opacity-60"
+          >
+            {scanning ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> AI is reading your photo…</>
+            ) : (
+              <>📸 Upload offer photo / screenshot (AI fills the form)</>
+            )}
+          </button>
+          {photoError && <p className="mt-1 text-sm text-pink-500">{photoError}</p>}
+        </div>
         <div>
           <label className={labelCls}>{t.shopName}</label>
           <input

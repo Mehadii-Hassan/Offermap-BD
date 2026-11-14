@@ -8,6 +8,41 @@ import { rateLimit, getClientIp } from "@/lib/rate-limit";
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
+// Ask Gemini whether a submission looks like genuine, real, free-of-spam/fake
+// content. Returns { ok, reason }.
+async function checkSpam({ title, shopName, discountText, description, area }) {
+  if (!process.env.GEMINI_API_KEY) return { ok: true, reason: "" };
+  const prompt = `You are a moderator for OfferMap BD (Bangladesh offers/deals). Judge this offer submission:
+title: ${title}
+shopName: ${shopName}
+discount: ${discountText}
+area: ${area}
+description: ${description}
+
+Return ONLY a JSON object: {"ok": true/false, "reason": "short reason"}. Set ok=true only if it is a real, plausible, current Bangladesh offer and not spam, scam, fake, or abuse.`;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
+        }),
+      }
+    );
+    if (!res.ok) return { ok: true, reason: "" };
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(cleaned || "{}");
+    return { ok: parsed.ok === true, reason: String(parsed.reason || "") };
+  } catch {
+    return { ok: true, reason: "" };
+  }
+}
+
 export async function POST(req) {
   if (!hasAdminEnv()) {
     return NextResponse.json(
@@ -135,9 +170,17 @@ export async function POST(req) {
     hotScore: 0,
   });
 
+  const verdict = await checkSpam({ title, shopName, discountText, description, area });
+  const status = verdict.ok ? "approved" : "pending";
+
   const { data, error } = await supabaseAdmin
     .from("offers")
-    .insert({ ...row, status: "pending" })
+    .insert({
+      ...row,
+      status,
+      source: "user",
+      source_url: null,
+    })
     .select("id")
     .single();
 
@@ -148,5 +191,5 @@ export async function POST(req) {
     );
   }
 
-  return NextResponse.json({ ok: true, id: data.id });
+  return NextResponse.json({ ok: true, id: data.id, status });
 }

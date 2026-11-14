@@ -185,6 +185,8 @@ const QUERY_ROTATION = buildQueries();
 let tavilySearches = 0;
 let geminiCalls = 0;
 let geminiRateLimited = false;
+// Candidate listing URLs found during normal Tavily runs (not yet in sources).
+const candidates = [];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -291,6 +293,7 @@ async function tavilySearch(query) {
       .filter((r) => r.title && r.content),
     images: data.images || [],
   };
+}
 
 async function geminiExtract(query, results) {
   if (geminiRateLimited || geminiCalls >= MAX_PAGES_PER_RUN) return [];
@@ -404,6 +407,191 @@ JSON response format:
   }
   return parsed;
 }
+
+// ---------- Listing-page crawl (feeds sources.json + pagination) ----------
+
+const USER_AGENT_SOURCE = "OfferMapBD/1.0 (offer scraper; mailto:contact@offermap-bd.example.com)";
+
+// Strict robots.txt check: if the path is disallowed for * , skip the page.
+async function robotsAllows(url) {
+  try {
+    const u = new URL(url);
+    const base = `${u.protocol}//${u.host}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(`${base}/robots.txt`, {
+      headers: { "User-Agent": USER_AGENT_SOURCE },
+      signal: ctrl.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+    if (!res.ok) return true;
+    const txt = await res.text();
+    const path = u.pathname;
+    let apply = false;
+    for (const line of txt.split(/\r?\n/)) {
+      const t = line.trim().toLowerCase();
+      if (t.startsWith("user-agent: *")) apply = true;
+      else if (t.startsWith("user-agent:")) apply = false;
+      else if (apply && t.startsWith("disallow:")) {
+        const dis = t.slice("disallow:".length).trim();
+        if (dis === "/" || (dis && path.startsWith(dis))) return false;
+      }
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+// Polite single-page fetch: robots-check, UA, 8s timeout, ~1 req/s.
+async function fetchPageText(sourceUrl) {
+  if (!sourceUrl || !/^https:\/\//i.test(sourceUrl)) return null;
+  if (!(await robotsAllows(sourceUrl))) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(sourceUrl, {
+      headers: { "User-Agent": USER_AGENT_SOURCE, Accept: "text/html,*/*;q=0.8" },
+      signal: ctrl.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text.length > 1_000_000 ? text.slice(0, 1_000_000) : text;
+  } catch {
+    return null;
+  }
+}
+
+function chunkText(text, maxLen = 150000) {
+  const out = [];
+  for (let i = 0; i < text.length; i += maxLen) {
+    out.push(text.slice(i, i + maxLen));
+  }
+  return out;
+}
+
+// Extract MANY offers from one listing page (chunked). Returns an array.
+async function extractPageOffers(pageUrl, html) {
+  if (!html) return [];
+  const chunks = chunkText(html);
+  const all = [];
+  for (let ci = 0; ci < chunks.length && !geminiRateLimited; ci++) {
+    if (geminiCalls >= MAX_PAGES_PER_RUN) break;
+    const prompt = `You are an offer intelligence agent for OfferMap BD (deals/discounts in Bangladesh).
+Today's date is ${todayDateStr()}.
+Source page URL: ${pageUrl}
+
+Listing page content:
+${chunks[ci]}
+
+Extract ALL unique offers/deals you can find on this listing page. Return a JSON array. For each offer ONLY these fields:
+- title: short offer title
+- shopName: business name
+- category: ONE of exactly these values: ${APP_CATEGORIES.join(", ")} (use "Other" if none fit)
+- division: division name in Bangladesh if known, else empty string
+- district: district name in Bangladesh if known, else empty string
+- address: street/area address if known, else empty string
+- discountText: e.g. "30% OFF", "Buy 1 Get 1 Free"
+- description: one or two sentence description
+- paymentMethod: Any or one of City Bank Card, bKash, Nagad, Rocket
+- validTill: offer END date as YYYY-MM-DD or null (convert Bengali/English/relative dates; use today ${todayDateStr()}; NEVER invent one)
+- ongoing: true only if explicitly ongoing/limited-time/while stock lasts with no end date; else false
+- outdated: true ONLY if about a PAST season/year (last Ramadan/Eid, "last year", old year); else false
+- nationwide: true ONLY if valid across all Bangladesh (bank/wallet/telecom/Daraz-type/large chain with many outlets); else false
+- bangladesh_offer: true ONLY if clearly for Bangladesh customers (BD shop/brand/bank/wallet, BDT/৳/Tk) — false for foreign/global sites priced in $/£/€; else false
+- imageUrl: best https image if available, else empty string
+
+Return ONLY a valid JSON array (no markdown). If nothing usable, return [].`;
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+        }),
+      }
+    );
+    geminiCalls += 1;
+    if (GEMINI_DELAY_MS > 0) await sleep(GEMINI_DELAY_MS);
+    if (!res.ok) {
+      const body = await res.text();
+      if (res.status === 429) {
+        geminiRateLimited = true;
+        console.warn(
+          `⚠️ Gemini rate limit (429). Stopping Gemini calls this run; ${geminiCalls - 1} calls already made.`
+        );
+        return all;
+      }
+      console.warn(`⚡ Gemini page call failed (${res.status}): ${body.slice(0, 200)}`);
+      continue;
+    }
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned || "[]");
+    } catch {
+      parsed = [];
+    }
+    if (Array.isArray(parsed)) {
+      for (const o of parsed) {
+        if (o && typeof o === "object") {
+          delete o.lat; delete o.lng; delete o.latitude; delete o.longitude;
+          if (!o.sourceUrl) o.sourceUrl = pageUrl;
+          all.push(o);
+        }
+      }
+    }
+  }
+  return all;
+}
+
+// Follow listing pagination (up to 5 pages) and collect all offers.
+async function crawlSource(baseUrl) {
+  let offers = [];
+  let pagesFetched = 0;
+  let nextUrl = baseUrl;
+  for (let p = 0; p < 5 && nextUrl && !geminiRateLimited; p++) {
+    await sleep(1000); // 1 request/second
+    const html = await fetchPageText(nextUrl);
+    if (!html) break;
+    pagesFetched += 1;
+    const more = await extractPageOffers(nextUrl, html);
+    offers = offers.concat(more);
+    // Try to find a "next page"-style link.
+    const rel = html.match(/<link[^>]+rel=["']next["'][^>]+href=["']([^"']+)["']/i);
+    let m = html.match(/<a[^>]+href=["']([^"']+)["'][^>]*>.*?next/i);
+    if (!m) m = html.match(/<a[^>]+href=["']([^"']+page=(\d+))["']/i);
+    nextUrl = null;
+    if (rel && rel[1]) nextUrl = resolveRelative(rel[1], nextUrl);
+    else if (m && m[1]) nextUrl = resolveRelative(m[1], nextUrl);
+  }
+  return { offers, pagesFetched };
+}
+
+function loadSources() {
+  const path = join(root, "data", "sources.json");
+  if (!existsSync(path)) return [];
+  try {
+    const arr = JSON.parse(readFileSync(path, "utf8"));
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+// Record candidate listing URLs seen during normal Tavily runs.
+function collectCandidateCandidates() {
+  return;
+}
+
+// ---------- Image helpers ----------
 
 async function nominatimSearch(query) {
   // Strictly max 1 request/second, with a proper User-Agent.
@@ -631,10 +819,20 @@ async function scrapeQuery(query) {
   for (const r of results) {
     if (r.url && r.published_date) publishedByUrl[r.url] = r.published_date;
   }
+  // Any listing-style pages found during a Tavily run become source candidates.
+  for (const r of results) {
+    if (r.url && !candidates.includes(r.url)) candidates.push(r.url);
+  }
+  const { offers, skipped } = await classifyOffers(rawOffers, images, publishedByUrl);
+  return { offers, skipped, stopped: null };
+}
+
+// Normalize, locate, sanitize, validate and image-resolve a batch of raw
+// offers. Shared by the Tavily path and the listing-page crawl.
+async function classifyOffers(rawList, images, publishedByUrl = {}) {
   const offers = [];
   const skipped = [];
-
-  for (const o of rawOffers) {
+  for (const o of rawList) {
     o.category = normalizeCategory(o.category);
 
     let loc;
@@ -711,7 +909,7 @@ async function scrapeQuery(query) {
       source: "scraper",
     });
   }
-  return { offers, skipped, stopped: null };
+  return { offers, skipped };
 }
 
 async function urlIsProcessed(sourceUrl) {
@@ -738,7 +936,7 @@ async function logProcessedUrl(sourceUrl) {
     );
 }
 
-async function upsertOffers(offersToInsert) {
+async function upsertOffers(offersToInsert, skipUrlCheck = false) {
   const results = [];
   const skipped = [];
   let exact = 0;
@@ -759,7 +957,7 @@ async function upsertOffers(offersToInsert) {
       continue;
     }
 
-    if (await urlIsProcessed(o.sourceUrl)) {
+    if (!skipUrlCheck && (await urlIsProcessed(o.sourceUrl))) {
       skipped.push({
         title: o.title,
         shopName: o.shopName,
@@ -815,7 +1013,7 @@ async function upsertOffers(offersToInsert) {
     if (error) {
       throw new Error(`Upsert failed: ${error.message}`);
     }
-    await logProcessedUrl(o.sourceUrl);
+    if (!skipUrlCheck) await logProcessedUrl(o.sourceUrl);
     if (o.addressApproximate) districtCenter += 1;
     else exact += 1;
     results.push({ ...row, id: data?.id, status: "inserted" });
@@ -880,6 +1078,8 @@ async function main() {
     skipped: [],
     failed: [],
     errors: [],
+    sources: { processed: 0, pagesFetched: 0, offersFound: 0, offersInserted: 0, skipped: 0, bySource: {} },
+    candidates: [],
     completedAt: nowISO(),
   };
 
@@ -942,6 +1142,59 @@ async function main() {
       report.errors.push({ query: q, error: err.message });
     }
   }
+
+  // ---- Listing-page source crawl (data/sources.json, direct fetch) ----
+  const allSources = loadSources();
+  const MAX_SOURCES_PER_RUN = Number(process.env.MAX_SOURCES_PER_RUN || 15);
+  const sourceStart = allSources.length ? dayNumber * MAX_SOURCES_PER_RUN % allSources.length : 0;
+  const todaysSources = allSources.length
+    ? Array.from({ length: Math.min(MAX_SOURCES_PER_RUN, allSources.length) }, (_, i) => allSources[(sourceStart + i) % allSources.length])
+    : [];
+  console.log(`🌐 Source crawl: processing ${todaysSources.length} listing page(s) from data/sources.json (rotation start ${sourceStart}, ${MAX_SOURCES_PER_RUN}/day).`);
+  for (let si = 0; si < todaysSources.length; si++) {
+    if (geminiRateLimited || geminiCalls >= MAX_PAGES_PER_RUN) break;
+    const src = todaysSources[si];
+    console.log(`   🌐 source[${si + 1}/${todaysSources.length}] ${src}`);
+    try {
+      const { offers: rawOffers, pagesFetched } = await crawlSource(src);
+      report.sources.processed += 1;
+      report.sources.pagesFetched += pagesFetched;
+      const { offers, skipped } = await classifyOffers(rawOffers, [], {});
+      const { results, skipped: skipped2, exact, districtCenter } = await upsertOffers(offers, true);
+      const ok = results.filter((r) => r.status === "inserted");
+      const dry = results.filter((r) => r.status === "dry_run");
+      const host = hostname(src);
+      report.sources.bySource[host] = report.sources.bySource[host] || { found: 0, inserted: 0, skipped: 0 };
+      report.sources.bySource[host].found += rawOffers.length;
+      report.sources.bySource[host].inserted += ok.length ? ok.length : dry.length;
+      report.sources.bySource[host].skipped += skipped.length + skipped2.length;
+      report.sources.offersFound += rawOffers.length;
+      report.sources.offersInserted += ok.length ? ok.length : dry.length;
+      report.sources.skipped += skipped.length + skipped2.length;
+      report.location.offersFound += rawOffers.length;
+      report.location.offersInserted += ok.length ? ok.length : dry.length;
+      report.location.skipped += skipped.length + skipped2.length;
+      report.location.exactLocation += exact;
+      report.location.districtCenter += districtCenter;
+      for (const s of skipped) report.skipped.push(s);
+      for (const s of skipped2) report.skipped.push(s);
+      for (const s of skipped) {
+        const b = s.reason in report.location.skipReasons ? s.reason : "missing field";
+        report.location.skipReasons[b] += 1;
+      }
+      for (const s of skipped2) {
+        const b = s.reason in report.location.skipReasons ? s.reason : "missing field";
+        report.location.skipReasons[b] += 1;
+      }
+      if (ok.length) report.inserted.push(...ok);
+      if (dry.length) report.inserted.push(...dry);
+      console.log(`      → ${ok.length || dry.length} inserted/${dry.length ? " (dry)" : ""} · ${rawOffers.length} found · ${skipped.length + skipped2.length} skipped`);
+    } catch (err) {
+      console.error(`   ❌ Source failed: ${src}`, err.message);
+      report.errors.push({ query: src, error: err.message });
+    }
+  }
+  report.candidates = candidates.slice(0, 50);
 
   report.runStats.queriesRun = report.queriesRun.length;
   report.runStats.tavilySearches = tavilySearches;
