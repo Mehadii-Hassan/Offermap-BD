@@ -159,20 +159,52 @@ function buildDedupeKey(shopName, discountText, area, sourceUrl) {
 
 const todayDateStr = () => new Date().toISOString().slice(0, 10);
 
+function addDays(iso, days) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Resolve the final valid_till from Gemini's validTill + ongoing + Tavily's
+// published_date. Mutates o.validTill and returns a skip reason if any.
+function resolveValidity(o, publishedDate) {
+  const raw = String(o.validTill || "").trim();
+  if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    if (raw < todayDateStr()) return "expired"; // expired
+    o.validTill = raw;
+    return null;
+  }
+  // No usable explicit end date.
+  const ongoing = o.ongoing === true;
+  if (!ongoing) {
+    return "no end date";
+  }
+  // ongoing, published within 30 days OR unknown date -> today + 21 days.
+  if (publishedDate) {
+    const publishedDay = String(publishedDate).slice(0, 10);
+    const daysSince = Math.floor((Date.now() - new Date(publishedDay + "T00:00:00Z").getTime()) / 86400000);
+    if (daysSince > 30) {
+      return "no end date"; // ongoing but page is stale (older than 30 days)
+    }
+  }
+  o.validTill = addDays(todayDateStr(), 21);
+  return null;
+}
+
 // Return a reason string if the offer is NOT publishable, else null.
 function invalidOfferReason(o) {
-  if (!o || !String(o.title || "").trim()) return "missing title";
-  if (!String(o.shopName || "").trim()) return "missing shop_name";
-  if (!String(o.discountText || "").trim()) return "missing discount_text";
+  if (!o || !String(o.title || "").trim()) return "missing field";
+  if (!String(o.shopName || "").trim()) return "missing field";
+  if (!String(o.discountText || "").trim()) return "missing field";
 
   const lat = Number(o.lat);
   const lng = Number(o.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "invalid lat/lng";
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "missing field";
   if (!isInsideBangladesh(lat, lng)) return "lat/lng outside Bangladesh";
 
   const vt = String(o.validTill || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(vt)) return "missing valid_till";
-  if (vt < todayDateStr()) return "expired valid_till";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(vt)) return "no end date";
+  if (vt < todayDateStr()) return "expired";
 
   return null;
 }
@@ -188,9 +220,10 @@ async function tavilySearch(query) {
     body: JSON.stringify({
       api_key: TAVILY_API_KEY,
       query,
-      depth: 2,
+      depth: "advanced",
       start_url: "https://www.google.com/maps",
       include_answer: false,
+      include_raw_content: false,
       max_results: RESULTS_PER_QUERY,
     }),
   });
@@ -205,6 +238,7 @@ async function tavilySearch(query) {
       url: r.url,
       title: r.title || "",
       content: r.content || "",
+      published_date: r.published_date || "",
     }))
     .filter((r) => r.title && r.content);
 }
@@ -218,10 +252,11 @@ async function geminiExtract(query, results) {
 
   const prompt = `You are an offer intelligence agent for OfferMap BD, a platform listing deals and offers in Bangladesh.
 Note: you must NEVER return coordinates (lat/lng). Location is resolved separately by our geocoder.
+Today's date is ${todayDateStr()}.
 
 Query: ${query}
 
-Web results:
+Web results (each may include a published_date):
 ${JSON.stringify(results, null, 2)}
 
 Extract at most 3 unique deals from these results. For each deal return a JSON object with ONLY these fields:
@@ -234,9 +269,17 @@ Extract at most 3 unique deals from these results. For each deal return a JSON o
 - discountText: e.g. "30% OFF", "Buy 1 Get 1 Free"
 - description: one or two sentence description
 - paymentMethod: Any or one of City Bank Card, bKash, Nagad, Rocket
-- validTill: an ISO date string (YYYY-MM-DD) in the future, or null
+- validTill: the offer END date as YYYY-MM-DD, or null (see rules below)
+- ongoing: true if the page says the offer is ongoing / limited time / while stock lasts / "চলছে" / "চলমান" with no fixed end date; otherwise false
 - imageUrl: the best product/offer image url if available, else empty string
 - sourceUrl: the source url
+
+validTill rules (use today ${todayDateStr()} as the reference date):
+- Convert Bengali dates and numerals (e.g. "৩০ নভেম্বর ২০২৬") and English formats ("30 Nov", "Nov 30, 2026") into YYYY-MM-DD. If the year is missing, pick the nearest upcoming match.
+- Convert relative dates ("this Friday", "till end of month", "by Eid") into a concrete YYYY-MM-DD using today's date.
+- If there is NO end date, set validTill to null.
+- NEVER invent an end date. If the page supports an ongoing offer (no end date but "ongoing"/"limited time"/"while stock lasts"/"চলছে"/"চলমান"), set validTill null and ongoing true.
+- If there is no end date and no ongoing sign, set validTill null and ongoing false.
 
 Return ONLY valid JSON (no markdown) as an array of objects. If nothing usable is found, return [].
 
@@ -252,7 +295,8 @@ JSON response format:
     "discountText": "...",
     "description": "...",
     "paymentMethod": "...",
-    "validTill": "...",
+    "validTill": "YYYY-MM-DD",
+    "ongoing": false,
     "imageUrl": "...",
     "sourceUrl": "..."
   }
@@ -372,6 +416,10 @@ async function scrapeQuery(query) {
   }
   const results = await tavilySearch(query);
   const rawOffers = await geminiExtract(query, results);
+  const publishedByUrl = {};
+  for (const r of results) {
+    if (r.url && r.published_date) publishedByUrl[r.url] = r.published_date;
+  }
   const offers = [];
   const skipped = [];
 
@@ -382,7 +430,23 @@ async function scrapeQuery(query) {
         title: o.title,
         shopName: o.shopName,
         url: o.sourceUrl,
+        rawValidTill: o.validTill,
+        ongoing: o.ongoing === true,
         reason: loc.skip,
+      });
+      continue;
+    }
+    // Resolve validity BEFORE we mutate validTill, so we can report raw values.
+    const publishedDate = publishedByUrl[o.sourceUrl] || "";
+    const validitySkip = resolveValidity(o, publishedDate);
+    if (validitySkip) {
+      skipped.push({
+        title: o.title,
+        shopName: o.shopName,
+        url: o.sourceUrl,
+        rawValidTill: o.validTill,
+        ongoing: o.ongoing === true,
+        reason: validitySkip,
       });
       continue;
     }
@@ -446,6 +510,8 @@ async function upsertOffers(offersToInsert) {
         title: o.title,
         shopName: o.shopName,
         url: o.sourceUrl,
+        rawValidTill: o.validTill,
+        ongoing: o.ongoing === true,
         reason,
       });
       console.log(`   ⏭ skipped: ${o.title || "(no title)"} — ${reason}`);
@@ -457,7 +523,9 @@ async function upsertOffers(offersToInsert) {
         title: o.title,
         shopName: o.shopName,
         url: o.sourceUrl,
-        reason: "already processed (scrape_log)",
+        rawValidTill: o.validTill,
+        ongoing: o.ongoing === true,
+        reason: "duplicate",
       });
       console.log(`   ⏭ skipped: ${o.title} — URL already processed`);
       continue;
@@ -552,7 +620,7 @@ async function main() {
       offersFound: 0,
       offersInserted: 0,
       skipped: 0,
-      skippedByReason: {},
+      skipReasons: { "no end date": 0, expired: 0, "unknown district": 0, "missing field": 0, duplicate: 0 },
       exactLocation: 0,
       districtCenter: 0,
     },
@@ -589,17 +657,19 @@ async function main() {
       });
       report.location.offersFound += offers.length;
 
-      // Location skips (unknown district).
+      // Location/validity skips (unknown district / no end date / expired).
       for (const s of skipped) {
         report.skipped.push(s);
         report.location.skipped += 1;
-        report.location.skippedByReason[s.reason] = (report.location.skippedByReason[s.reason] || 0) + 1;
+        const bucket = s.reason in report.location.skipReasons ? s.reason : "missing field";
+        report.location.skipReasons[bucket] += 1;
       }
       // Validation / duplicate skips from upsert.
       for (const s of skipped2) {
         report.skipped.push(s);
         report.location.skipped += 1;
-        report.location.skippedByReason[s.reason] = (report.location.skippedByReason[s.reason] || 0) + 1;
+        const bucket = s.reason in report.location.skipReasons ? s.reason : "missing field";
+        report.location.skipReasons[bucket] += 1;
       }
 
       // Count offers that made it through (inserted or would-insert in dry run).
@@ -642,6 +712,20 @@ async function main() {
     );
   }
 
+  // Print up to 5 SKIPPED offers so you can see why they were skipped.
+  console.log("⏭ Up to 5 skipped offers:");
+  const skippedFive = report.skipped.slice(0, 5);
+  if (!skippedFive.length) {
+    console.log("   (none)");
+  }
+  for (const s of skippedFive) {
+    console.log(
+      `   - ${s.title || "(no title)"} · ${s.shopName || ""} · rawValidTill=${s.rawValidTill ?? "-"} · ongoing=${s.ongoing ? "true" : "false"} · reason=${s.reason}`
+    );
+  }
+
+  const sums = report.location.skipReasons;
+  console.log("🗂 Skip reasons:", Object.keys(sums).map((k) => `${k}=${sums[k]}`).join(", "));
   console.log(`✅ Report written to ${REPORT_FILE}`);
   console.log(
     `✅ Done. Found: ${report.location.offersFound} · Inserted: ${report.location.offersInserted} · Skipped: ${report.location.skipped} · Tavily: ${tavilySearches} · Gemini: ${geminiCalls} · Exact: ${report.location.exactLocation} · District-center: ${report.location.districtCenter}`
