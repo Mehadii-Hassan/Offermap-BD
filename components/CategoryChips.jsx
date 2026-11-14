@@ -1,34 +1,28 @@
 "use client";
 
 import { motion } from "framer-motion";
-import {
-  UtensilsCrossed,
-  Shirt,
-  CreditCard,
-  Smartphone,
-  Scissors,
-  ShoppingBasket,
-  Clapperboard,
-  Sparkles,
-} from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { CATEGORIES } from "@/lib/offers";
+import { CATEGORIES, getCategory } from "@/lib/categories";
 
-export const CATEGORY_ICONS = {
-  Restaurant: UtensilsCrossed,
-  "Fashion & Clothing": Shirt,
-  "Bank Card Offers": CreditCard,
-  Electronics: Smartphone,
-  "Salon & Beauty": Scissors,
-  Grocery: ShoppingBasket,
-  Entertainment: Clapperboard,
-};
+const FALLBACK_ICON = Sparkles;
+
+// Never render an undefined component: if a category carries no usable lucide
+// icon, fall back to the "Other" icon, then to a generic Sparkles icon.
+function safeIcon(c) {
+  const icon = (c && c.icon) || (c && getCategory(c.key).icon);
+  return typeof icon === "function" ? icon : FALLBACK_ICON;
+}
 
 export default function CategoryChips({ active, onSelect }) {
   const { t } = useApp();
   const items = [
-    { label: t.categoryAll, value: "All", icon: Sparkles },
-    ...CATEGORIES.map((c) => ({ label: c, value: c, icon: CATEGORY_ICONS[c] })),
+    { label: t.categoryAll, value: "All", icon: FALLBACK_ICON },
+    ...CATEGORIES.filter((c) => c.key !== "Other").map((c) => ({
+      label: c.en,
+      value: c.key,
+      icon: safeIcon(c),
+    })),
   ];
 
   return (
