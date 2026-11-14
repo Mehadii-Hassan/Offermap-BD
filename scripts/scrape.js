@@ -92,6 +92,37 @@ const CATEGORIES = [
   { en: "bkash nagad cashback", bn: "বিকাশ নগদ ক্যাশব্যাক" },
 ];
 
+// Canonical offer categories, mirroring /lib/categories.js. The scraper only
+// uses these keys; any unknown category a source returns is mapped to "Other".
+const APP_CATEGORIES = [
+  "Restaurant",
+  "Fashion & Clothing",
+  "Bank Card Offers",
+  "Electronics",
+  "Salon & Beauty",
+  "Grocery",
+  "Entertainment",
+  "Travel & Hotels",
+  "Mobile & Gadgets",
+  "Health & Fitness",
+  "Education & Courses",
+  "Online Shopping",
+  "Cashback & Wallet",
+  "Mobile Wallet Cashback",
+];
+
+// Map a source-provided category to a known key, or "Other" when unknown.
+function normalizeCategory(c) {
+  const key = String(c || "").trim();
+  for (let i = 0; i < APP_CATEGORIES.length; i++) {
+    if (APP_CATEGORIES[i] === key) return key;
+  }
+  return "Other";
+}
+
+// Default map pin for nationwide (whole-Bangladesh) offers.
+const DHAKA_CENTER = { lat: 23.8103, lng: 90.4125 };
+
 // Locations: Bangladesh-wide, the 8 divisions, and ~20 major districts/cities.
 const LOCATIONS = [
   "Bangladesh", "Dhaka", "Chattogram", "Sylhet", "Khulna", "Rajshahi",
@@ -273,7 +304,7 @@ ${JSON.stringify(results, null, 2)}
 Extract at most 3 unique deals from these results. For each deal return a JSON object with ONLY these fields:
 - title: short offer title
 - shopName: business name
-- category: one of Restaurant, Fashion & Clothing, Bank Card Offers, Electronics, Salon & Beauty, Grocery, Entertainment, Travel & Hotels, Mobile & Gadgets, Health, Education & Courses, Online Shopping, Mobile Wallet Cashback
+- category: ONE of exactly these values: ${APP_CATEGORIES.join(", ")} (use "Other" if none fit)
 - division: division name in Bangladesh if known, else empty string
 - district: district name in Bangladesh if known, else empty string
 - address: street/area address if known, else empty string
@@ -282,6 +313,8 @@ Extract at most 3 unique deals from these results. For each deal return a JSON o
 - paymentMethod: Any or one of City Bank Card, bKash, Nagad, Rocket
 - validTill: the offer END date as YYYY-MM-DD, or null (see rules below)
 - ongoing: true if the page says the offer is ongoing / limited time / while stock lasts / "চলছে" / "চলমান" with no fixed end date; otherwise false
+- outdated: true ONLY if the offer is clearly about a PAST event/season (e.g. last Ramadan or Eid now that the season is over, a last-year campaign, or a title/date mentioning an old year). Today's date is ${todayDateStr()}. Otherwise false.
+- nationwide: true ONLY if the offer is valid across ALL of Bangladesh (e.g. Daraz, bKash, Nagad, a bank, or a brand with many outlets). Otherwise false.
 - bangladesh_offer: true ONLY if the offer is clearly for customers in Bangladesh — a Bangladeshi shop/brand/outlet, a Bangladeshi bank or wallet (bKash/Nagad/Rocket/City/DBBL...), a Bangladeshi website, or prices in BDT/৳/Tk. FALSE for foreign sites and global booking/travel/software/course platforms (e.g. Expedia, Hotwire, Coursera, Scrimba) or anything priced in $, £, € only or with US/UK-only terms.
 - imageUrl: the best product/offer image url if available, else empty string
 - sourceUrl: the source url
@@ -313,6 +346,8 @@ JSON response format:
     "paymentMethod": "...",
     "validTill": "YYYY-MM-DD",
     "ongoing": false,
+    "outdated": false,
+    "nationwide": false,
     "bangladesh_offer": true,
     "imageUrl": "...",
     "sourceUrl": "..."
@@ -427,11 +462,41 @@ async function resolveLocation(o) {
   };
 }
 
+// True if discount_text carries a real value (% amount, BDT/Tk/৳ price, or a
+// freebie/BOGO/cashback). Plain "Special Offer" or "Discount" with no number
+// or freebie is treated as a vague discount.
+function hasRealDiscount(o) {
+  const d = String(o.discountText || "").toLowerCase();
+  if (/%\s*\d+|\d+\s*%/.test(d)) return true;
+  if (/(\d[\d,]*)\s*(tk|taka|bdt|৳)/.test(d)) return true;
+  if (/(free|bogo|buy 1 get 1|get one free|2 for 1|gift|cashback|off\b|discounted|price)/.test(d)) return true;
+  return false;
+}
+
+// True if the offer is clearly about a past season/campaign (old year, last
+// year, or a season like Ramadan/Eid that is not happening now).
+function isOutdatedSeason(o) {
+  const text = `${o.title} ${o.description} ${o.discountText}`.toLowerCase();
+  const currentYear = new Date().getFullYear();
+  const y = text.match(/\b(19|20)\d{2}\b/);
+  if (y && Number(y[0]) < currentYear) return true;
+  if (/last year|previous year|last (ramadan|eid|sale|season)/.test(text)) return true;
+  if (/ramadan|eid/.test(text)) {
+    const month = new Date().getMonth() + 1; // 1..12
+    if (!(month >= 2 && month <= 8)) return true;
+  }
+  return false;
+}
+
 // Sanity checks for Bangladesh-only + believable discounts. Returns a skip
 // reason or null.
 function sanityCheckOffer(o) {
   // Must clearly be a Bangladesh offer.
   if (o.bangladesh_offer !== true) return "not Bangladesh";
+  // Skip offers about a past event/season.
+  if (o.outdated === true || isOutdatedSeason(o)) return "outdated season";
+  // Skip offers with no real discount value.
+  if (!hasRealDiscount(o)) return "vague discount";
   const discountText = String(o.discountText || "").toLowerCase();
   const m = discountText.match(/(\d+)\s*%/);
   const pct = m ? parseInt(m[1], 10) : 0;
@@ -459,7 +524,18 @@ async function scrapeQuery(query) {
   const skipped = [];
 
   for (const o of rawOffers) {
-    const loc = await resolveLocation(o);
+    o.category = normalizeCategory(o.category);
+
+    let loc;
+    if (o.nationwide === true) {
+      // Whole-Bangladesh offers: no district/division, pin at the Dhaka center.
+      loc = { lat: DHAKA_CENTER.lat, lng: DHAKA_CENTER.lng, displayName: "Bangladesh", addressApproximate: true };
+      o.district = null;
+      o.division = null;
+      o.area = "Bangladesh";
+    } else {
+      loc = await resolveLocation(o);
+    }
     if (loc.skip) {
       skipped.push({
         title: o.title,
@@ -508,9 +584,9 @@ async function scrapeQuery(query) {
       ...o,
       lat: loc.lat,
       lng: loc.lng,
-      area: loc.area || o.district || loc.displayName || o.division || "",
-      division: o.division || loc.division || "",
-      district: o.district || "",
+      area: o.area || loc.area || o.district || loc.displayName || o.division || "",
+      division: o.division ?? null,
+      district: o.district ?? null,
       address: addressText,
       displayName: loc.displayName || "",
       addressApproximate: loc.addressApproximate,
@@ -584,8 +660,8 @@ async function upsertOffers(offersToInsert) {
       shop_name: String(o.shopName).trim(),
       category: o.category,
       area: o.area,
-      division: o.division || "",
-      district: o.district || "",
+      division: o.division ?? null,
+      district: o.district ?? null,
       address: o.address || "",
       lat: Number(o.lat),
       lng: Number(o.lng),
@@ -596,6 +672,7 @@ async function upsertOffers(offersToInsert) {
       image: o.imageUrl || null,
       is_ongoing: o.isOngoing === true,
       is_featured: false,
+      nationwide: o.nationwide === true,
       hot_score: Math.floor(Math.random() * 50) + 40,
       status: "approved",
       source: o.source || "scraper",
@@ -677,7 +754,7 @@ async function main() {
       offersFound: 0,
       offersInserted: 0,
       skipped: 0,
-      skipReasons: { "no end date": 0, expired: 0, "unknown district": 0, "missing field": 0, duplicate: 0, "not Bangladesh": 0, "bad discount": 0 },
+      skipReasons: { "no end date": 0, expired: 0, "unknown district": 0, "missing field": 0, duplicate: 0, "not Bangladesh": 0, "bad discount": 0, "outdated season": 0, "vague discount": 0 },
       exactLocation: 0,
       districtCenter: 0,
     },
