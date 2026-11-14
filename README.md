@@ -27,7 +27,7 @@ Discover discounts, deals and hot offers **near your location** across Banglades
 1. **Set up Supabase**
    - Create a Supabase project.
    - Create the `offers` table with these columns:
-     `id (uuid, default gen_random_uuid()), title, shop_name, category, division, district, area, address, lat, lng, discount_text, description, valid_till (date), payment_method, image, is_featured (bool), hot_score (int), status (text: 'pending'/'approved'/'rejected'), source, source_url, dedupe_key, worked_count (int), not_worked_count (int), created_at (timestamptz, default now())`.
+     `id (uuid, default gen_random_uuid()), title, shop_name, category, division, district, area, address, lat, lng, discount_text, description, valid_till (date), payment_method, image, is_ongoing (bool, default false), is_featured (bool), hot_score (int), status (text: 'pending'/'approved'/'rejected'), source, source_url, dedupe_key, worked_count (int), not_worked_count (int), created_at (timestamptz, default now())`.
    - Add a **unique constraint on `dedupe_key`** so the scraper upserts by it.
    - Create the `scrape_log` table: `id (uuid, default gen_random_uuid()), url (text, unique, not null), scraped_at (timestamptz, default now())`.
    - Create a public storage bucket named `offer-images`.

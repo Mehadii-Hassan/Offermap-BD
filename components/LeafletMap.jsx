@@ -77,11 +77,15 @@ export default function LeafletMap({ offers, userCoords, selectedId, onSelect })
                   )}
                 </div>
               )}
-              {isEndingSoon(offer) && (
+              {offer.isOngoing ? (
+                <div className="mt-1 text-[11px] font-bold uppercase text-purple-500">
+                  {t.ongoing} · {t.endDateNotConfirmed}
+                </div>
+              ) : isEndingSoon(offer) ? (
                 <div className="text-[11px] font-bold uppercase text-red-500">
                   {t.endingSoonBadge}
                 </div>
-              )}
+              ) : null}
               <Link
                 href={`/offer/${offer.id}`}
                 className="mt-2 inline-block rounded-lg bg-gradient-to-tr from-pink-500 to-purple-600 px-3 py-1.5 text-xs font-bold text-white"

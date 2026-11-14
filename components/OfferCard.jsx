@@ -18,6 +18,7 @@ import Countdown from "./Countdown";
 import { getSavedIds, toggleSavedId } from "@/lib/storage";
 
 export function isEndingSoon(offer) {
+  if (offer.isOngoing) return false;
   const diff = new Date(offer.validTill).getTime() - Date.now();
   return diff > 0 && diff < 4 * 86400000; // within 4 days
 }
@@ -99,15 +100,21 @@ export default function OfferCard({
             </motion.span>
           </button>
 
-          {/* Ending soon chip */}
-          {ending && (
+          {/* Ending soon chip / Ongoing badge */}
+          {offer.isOngoing ? (
+            <div className="absolute bottom-3 left-3">
+              <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/80 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+                {t.ongoing}
+              </span>
+            </div>
+          ) : ending ? (
             <div className="absolute bottom-3 left-3">
               <span className="inline-flex items-center gap-1 rounded-md bg-red-500/80 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
                 {t.endingSoonBadge}
               </span>
             </div>
-          )}
+          ) : null}
 
           {/* Source badge chip */}
           <div className="absolute bottom-3 right-3">
@@ -140,10 +147,17 @@ export default function OfferCard({
 
           <div className="mt-auto flex items-center justify-between pt-2">
             <div className="flex items-center gap-2 text-xs">
-              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/20 px-2 py-1 font-semibold text-emerald-200">
-                <Clock size={12} />
-                <Countdown validTill={offer.validTill} compact />
-              </span>
+              {offer.isOngoing ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/20 px-2 py-1 font-semibold text-purple-200" title={t.endDateNotConfirmed}>
+                  <Clock size={12} />
+                  {t.ongoing}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/20 px-2 py-1 font-semibold text-emerald-200">
+                  <Clock size={12} />
+                  <Countdown validTill={offer.validTill} compact />
+                </span>
+              )}
               {offer.viewsToday != null && (
                 <span className="inline-flex items-center gap-1 text-white/40">
                   <Flame size={12} className="text-accent-orange" />

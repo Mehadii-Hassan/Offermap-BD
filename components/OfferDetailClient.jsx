@@ -191,13 +191,22 @@ export default function OfferDetailClient({ offer }) {
               <span>{offer.address}</span>
             </div>
           )}
-          {/* Validity countdown */}
+          {/* Validity countdown / Ongoing */}
           <div className="mb-6 flex flex-wrap items-center gap-4">
-            <div className="glass inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white/80">
-              <Clock size={15} className="text-emerald-300" />
-              {t.validity}: {formatDate(offer.validTill)}
-            </div>
-            <Countdown validTill={offer.validTill} />
+            {offer.isOngoing ? (
+              <div className="glass inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white/80">
+                <Clock size={15} className="text-purple-300" />
+                {t.ongoing} · {t.endDateNotConfirmed}
+              </div>
+            ) : (
+              <>
+                <div className="glass inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white/80">
+                  <Clock size={15} className="text-emerald-300" />
+                  {t.validity}: {formatDate(offer.validTill)}
+                </div>
+                <Countdown validTill={offer.validTill} />
+              </>
+            )}
           </div>
 
           {/* Payment */}

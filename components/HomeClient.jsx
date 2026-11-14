@@ -141,6 +141,7 @@ export default function HomeClient() {
   const ending = useMemo(
     () =>
       [...allOffers]
+        .filter((o) => !o.isOngoing)
         .sort((a, b) => new Date(a.validTill) - new Date(b.validTill))
         .slice(0, 8),
     [allOffers]

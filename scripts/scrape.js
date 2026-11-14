@@ -48,6 +48,12 @@ const MAX_QUERIES_PER_RUN = Number(
 const MAX_PAGES_PER_RUN = Number(process.env.MAX_PAGES_PER_RUN || 60);
 const RESULTS_PER_QUERY = Number(process.env.SCRAPE_RESULTS || 5);
 const GEMINI_DELAY_MS = Number(process.env.SCRAPE_GEMINI_DELAY_MS || 1100);
+// Tavily depth: "basic" (1 credit/search) by default; only "advanced" (more
+// credits) if TAVILY_DEPTH=advanced is set.
+const TAVILY_DEPTH = process.env.TAVILY_DEPTH === "advanced" ? "advanced" : "basic";
+// Each basic search = 1 credit. A monthly estimate warns when too high.
+const TAVILY_CREDITS_PER_SEARCH = TAVILY_DEPTH === "advanced" ? 2 : 1;
+const TAVILY_MONTHLY_BUDGET = Number(process.env.TAVILY_MONTHLY_BUDGET || 900);
 
 if (!url || !serviceKey) {
   console.error("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local");
@@ -166,8 +172,10 @@ function addDays(iso, days) {
 }
 
 // Resolve the final valid_till from Gemini's validTill + ongoing + Tavily's
-// published_date. Mutates o.validTill and returns a skip reason if any.
+// published_date. Mutates o.validTill // o.isOngoing and returns a skip reason.
 function resolveValidity(o, publishedDate) {
+  // Default: not flagged until we invent a date.
+  o.isOngoing = false;
   const raw = String(o.validTill || "").trim();
   if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     if (raw < todayDateStr()) return "expired"; // expired
@@ -188,6 +196,7 @@ function resolveValidity(o, publishedDate) {
     }
   }
   o.validTill = addDays(todayDateStr(), 21);
+  o.isOngoing = true; // date was set by our rule, not a real page end date
   return null;
 }
 
@@ -220,7 +229,7 @@ async function tavilySearch(query) {
     body: JSON.stringify({
       api_key: TAVILY_API_KEY,
       query,
-      depth: "advanced",
+      depth: TAVILY_DEPTH,
       start_url: "https://www.google.com/maps",
       include_answer: false,
       include_raw_content: false,
@@ -546,6 +555,7 @@ async function upsertOffers(offersToInsert) {
       valid_till: String(o.validTill).trim(),
       payment_method: o.paymentMethod,
       image: o.imageUrl || null,
+      is_ongoing: o.isOngoing === true,
       is_featured: false,
       hot_score: Math.floor(Math.random() * 50) + 40,
       status: "approved",
@@ -615,6 +625,14 @@ async function main() {
       tavilySearches: 0,
       geminiCalls: 0,
       geminiRateLimited: false,
+      tavily: {
+        depth: TAVILY_DEPTH,
+        creditsPerSearch: TAVILY_CREDITS_PER_SEARCH,
+        creditsUsedThisRun: 0,
+        monthlyBudget: TAVILY_MONTHLY_BUDGET,
+        monthlyEstimate: 0,
+        overBudget: false,
+      },
     },
     location: {
       offersFound: 0,
@@ -697,6 +715,19 @@ async function main() {
   report.runStats.geminiCalls = geminiCalls;
   report.runStats.geminiRateLimited = geminiRateLimited;
 
+  // Tavily cost estimate: this run's credits + a rough 30-day projection.
+  const creditsThisRun = tavilySearches * TAVILY_CREDITS_PER_SEARCH;
+  const monthlyEstimate = MAX_QUERIES_PER_RUN * 30 * TAVILY_CREDITS_PER_SEARCH;
+  const overBudget = monthlyEstimate > TAVILY_MONTHLY_BUDGET;
+  report.runStats.tavily.creditsUsedThisRun = creditsThisRun;
+  report.runStats.tavily.monthlyEstimate = monthlyEstimate;
+  report.runStats.tavily.overBudget = overBudget;
+  if (overBudget) {
+    console.warn(
+      `⚠️ Tavily budget warning: ~${creditsThisRun} credits this run; rough 30-day estimate ${monthlyEstimate} credits is ABOVE your budget of ${TAVILY_MONTHLY_BUDGET} (depth=${TAVILY_DEPTH}, ${TAVILY_CREDITS_PER_SEARCH} cr/search). Lower MAX_QUERIES_PER_RUN or use basic depth.`
+    );
+  }
+
   writeFileSync(REPORT_FILE, JSON.stringify(report, null, 2));
 
   // Print the first 5 offers (dry-run "would-inserted" ones) to the console.
@@ -728,7 +759,7 @@ async function main() {
   console.log("🗂 Skip reasons:", Object.keys(sums).map((k) => `${k}=${sums[k]}`).join(", "));
   console.log(`✅ Report written to ${REPORT_FILE}`);
   console.log(
-    `✅ Done. Found: ${report.location.offersFound} · Inserted: ${report.location.offersInserted} · Skipped: ${report.location.skipped} · Tavily: ${tavilySearches} · Gemini: ${geminiCalls} · Exact: ${report.location.exactLocation} · District-center: ${report.location.districtCenter}`
+    `✅ Done. Found: ${report.location.offersFound} · Inserted: ${report.location.offersInserted} · Skipped: ${report.location.skipped} · Tavily: ${tavilySearches} (${creditsThisRun} cr) · Gemini: ${geminiCalls} · Exact: ${report.location.exactLocation} · District-center: ${report.location.districtCenter}`
   );
 }
 
