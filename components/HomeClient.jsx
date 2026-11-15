@@ -162,6 +162,21 @@ export default function HomeClient() {
     return list;
   }, [baseList, filters, userCoords, activeCategory, radiusInfo.radius]);
 
+  // Recommendation sections for the chosen place (distance bands + nationwide).
+  const recommendations = useMemo(() => {
+    if (userCoords == null) return [];
+    const byDistance = (a, b) =>
+      (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity) || b.hotScore - a.hotScore;
+    const inRadius = filteredList.filter((o) => !o.nationwide && o.distanceKm != null);
+    const sections = [
+      { key: "veryClose", title: t.veryClose, max: 2, list: inRadius.filter((o) => o.distanceKm <= 2).sort(byDistance) },
+      { key: "inArea", title: t.inArea, max: 5, list: inRadius.filter((o) => o.distanceKm > 2 && o.distanceKm <= 5).sort(byDistance) },
+      { key: "inCity", title: t.inCity, max: 25, list: inRadius.filter((o) => o.distanceKm > 5 && o.distanceKm <= 25).sort(byDistance) },
+      { key: "nationwide", title: t.nationwideOnline, max: 200, list: filteredList.filter((o) => o.nationwide === true).sort(byDistance) },
+    ];
+    return sections.map((s) => ({ ...s, list: s.list.filter((o) => o.distanceKm <= s.max) }));
+  }, [filteredList, userCoords, t]);
+
   // Derive the curated sections from the single fetched list.
   // Offer count per category (normalized) for the chips.
 const categoryCounts = useMemo(() => {
@@ -646,6 +661,33 @@ const nearOffers = useMemo(() => {
                     </div>
                   )}
                 </div>
+
+                {/* Recommendation sections for the chosen place */}
+                {userCoords != null &&
+                  recommendations.map((sec) => {
+                    if (sec.list.length === 0) return null;
+                    return (
+                      <div key={sec.key} className="mb-10">
+                        <SectionHeading emoji="📍" title={`${sec.title} (${sec.list.length})`} />
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                          {sec.list.slice(0, 12).map((o, i) => (
+                            <OfferCard
+                              key={o.id}
+                              offer={o}
+                              index={i}
+                              distanceKm={o.distanceKm}
+                              onFirstSave={handleFirstSave}
+                            />
+                          ))}
+                        </div>
+                        {sec.list.length > 12 && (
+                          <p className="mt-4 text-center text-xs text-white/50">
+                            {t.loadMore} → {sec.list.slice(12).length} more in the full list below
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
 
                 {/* Filtered results / all deals */}
                 <div className="mb-10">
