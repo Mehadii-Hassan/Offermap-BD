@@ -4,6 +4,7 @@ import { supabaseAdmin, hasAdminEnv } from "@/lib/supabaseAdmin";
 import { CATEGORIES, PAYMENT_METHODS } from "@/lib/offers";
 import { isInsideBangladesh } from "@/lib/bd-locations";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { logEvent } from "@/lib/activity";
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -190,6 +191,8 @@ export async function POST(req) {
       { status: 500 }
     );
   }
+
+  await logEvent({ event: "added", offerId: data.id, source: "user", detail: status });
 
   return NextResponse.json({ ok: true, id: data.id, status });
 }

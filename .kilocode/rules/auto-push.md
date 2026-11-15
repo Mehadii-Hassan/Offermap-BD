@@ -1,6 +1,15 @@
 # Auto-Push Rule
 
-After finishing ANY task that changes project files, and after `npm run build` passes, always automatically run:
+Before EVERY commit, run:
+
+```
+npm run build
+npm run test:e2e
+```
+
+Fix any failures (max 3 tries). Never push a failing build, and never commit `.env.local` or any secret key.
+
+After `npm run build` and `npm run test:e2e` pass, always automatically run:
 
 ```
 git status

@@ -1014,6 +1014,19 @@ async function upsertOffers(offersToInsert, skipUrlCheck = false) {
       throw new Error(`Upsert failed: ${error.message}`);
     }
     if (!skipUrlCheck) await logProcessedUrl(o.sourceUrl);
+    // Log the 'added' event for scraper-inserted offers (LIVE only).
+    try {
+      if (data?.id) {
+        await supabase.from("activity_log").insert({
+          event: "added",
+          offer_id: data.id,
+          source: "scraper",
+          detail: "scraped",
+        });
+      }
+    } catch (e) {
+      /* non-fatal */
+    }
     if (o.addressApproximate) districtCenter += 1;
     else exact += 1;
     results.push({ ...row, id: data?.id, status: "inserted" });
@@ -1212,6 +1225,26 @@ async function main() {
     console.warn(
       `⚠️ Tavily budget warning: ~${creditsThisRun} credits this run; rough 30-day estimate ${monthlyEstimate} credits is ABOVE your budget of ${TAVILY_MONTHLY_BUDGET} (depth=${TAVILY_DEPTH}, ${TAVILY_CREDITS_PER_SEARCH} cr/search). Lower MAX_QUERIES_PER_RUN or use basic depth.`
     );
+  }
+
+  // Record this run in scrape_runs (LIVE only).
+  if (!DRY_RUN) {
+    try {
+      await supabase.from("scrape_runs").insert({
+        queries: report.runStats.queriesRun,
+        pages: report.sources.pagesFetched,
+        found: report.location.offersFound,
+        inserted: report.location.offersInserted,
+        skipped: report.location.skipped,
+        duplicates: report.location.skipReasons.duplicate || 0,
+        errors: report.errors.length,
+        tavily_credits: creditsThisRun,
+        gemini_calls: geminiCalls,
+        mode: "live",
+      });
+    } catch (e) {
+      /* non-fatal */
+    }
   }
 
   writeFileSync(REPORT_FILE, JSON.stringify(report, null, 2));

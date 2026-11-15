@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { hasAdminEnv, adminUpdateOffer, adminDeleteOffer, adminGetAllOffers } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { logEvent } from "@/lib/activity";
 
 export async function PATCH(req, { params }) {
   if (!requireAdmin()) {
@@ -51,6 +52,9 @@ export async function PATCH(req, { params }) {
 
   try {
     await adminUpdateOffer(id, updates);
+    if (body.action === "reject") {
+      await logEvent({ event: "rejected", offerId: id, source: "admin" });
+    }
   } catch (e) {
     return NextResponse.json(
       { error: "Update failed", detail: e.message },
@@ -69,6 +73,7 @@ export async function DELETE(req, { params }) {
   }
   try {
     await adminDeleteOffer(params.id);
+    await logEvent({ event: "admin_deleted", offerId: params.id, source: "admin" });
   } catch (e) {
     return NextResponse.json(
       { error: "Delete failed", detail: e.message },

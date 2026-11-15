@@ -10,6 +10,9 @@
     "seed": "node scripts/seed.js",
     "clean-samples": "node scripts/clean-samples.js",
     "reset-scraped": "node scripts/reset-scraped.js",
+    "migrate": "node scripts/migrate.js",
+    "cleanup": "node scripts/cleanup-expired.js",
+    "test:e2e": "npm run build && playwright test",
     "scrape": "node scripts/scrape.js",
     "scrape:dry": "SCRAPE_DRY_RUN=true node scripts/scrape.js"
   },
@@ -19,11 +22,13 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^0.454.0",
     "next": "14.2.15",
+    "pg": "^8.23.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14"
