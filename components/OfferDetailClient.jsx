@@ -25,6 +25,7 @@ import {
   formatDate,
   distanceToOffer,
   formatDistance,
+  nearestOutlet,
 } from "@/lib/offers";
 import { getGeo } from "@/lib/geo";
 import Countdown from "./Countdown";
@@ -42,6 +43,18 @@ export default function OfferDetailClient({ offer }) {
   const userDistance = userCoords
     ? distanceToOffer(offer, userCoords.lat, userCoords.lng)
     : null;
+  // Nearest outlet (gives the closest branch + its area + distance).
+  const nearest = userCoords ? nearestOutlet(offer, userCoords.lat, userCoords.lng) : null;
+  // All outlets sorted by distance from the user (or unsorted if no coords).
+  const outlets = Array.isArray(offer.outlets) ? offer.outlets : [];
+  const sortedOutlets = [...outlets]
+    .map((ot) => ({
+      ...ot,
+      distanceKm: userCoords
+        ? Math.hypot(ot.lat - userCoords.lat, ot.lng - userCoords.lng) * 111
+        : null,
+    }))
+    .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
   const [saved, setSaved] = useState(
     () => typeof window !== "undefined" && getSavedIds().includes(String(offer.id))
   );
@@ -110,7 +123,9 @@ export default function OfferDetailClient({ offer }) {
     }
   }
 
-  const directions = getDirectionsUrl(offer);
+  const directions = nearest
+    ? `https://www.google.com/maps/dir/?api=1&destination=${nearest.lat},${nearest.lng}`
+    : getDirectionsUrl(offer);
   const wa = whatsappShareUrl(offer);
   const msg = messengerShareUrl(offer);
 
@@ -311,10 +326,20 @@ export default function OfferDetailClient({ offer }) {
             </div>
           </div>
 
-          {/* Bigger map with exact pin */}
+          {/* Bigger map with exact pin + all outlet pins (clustered) */}
           <div className="overflow-hidden rounded-2xl border border-white/10">
             <MapView
-              offers={[offer]}
+              offers={[
+                offer,
+                ...outlets.map((ot, i) => ({
+                  ...offer,
+                  id: `${offer.id}-outlet-${i}`,
+                  lat: ot.lat,
+                  lng: ot.lng,
+                  area: ot.area || ot.name || t.outlet,
+                  shopName: `${offer.shopName} · ${ot.area || ot.name || t.outlet}`,
+                })),
+              ]}
               userCoords={userCoords}
               selectedId={offer.id}
               onSelect={() => {}}
@@ -322,7 +347,7 @@ export default function OfferDetailClient({ offer }) {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/10 bg-white/5 px-4 py-3 text-xs text-white/60">
               <span className="inline-flex items-center gap-1">
                 <MapPin size={12} className="text-accent-orange" />
-                {offer.area}
+                {nearest ? `${t.nearestOutlet}: ${nearest.area || t.outlet}` : offer.area}
                 {offer.lat != null && offer.lng != null && (
                   <span className="text-white/40">
                     · {offer.lat.toFixed(4)}, {offer.lng.toFixed(4)}
@@ -335,8 +360,52 @@ export default function OfferDetailClient({ offer }) {
                   {formatDistance(userDistance)}
                 </span>
               )}
+              {outlets.length > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-1.5 py-0.5 font-semibold text-emerald-200">
+                  {outlets.length} {t.outlets}
+                </span>
+              )}
             </div>
           </div>
+
+          {/* Outlet list, sorted by distance from the saved place */}
+          {outlets.length > 0 && (
+            <div className="mt-6">
+              <h2 className="mb-2 text-lg font-bold">📍 {t.outlets}</h2>
+              <ul className="space-y-2">
+                {sortedOutlets.slice(0, 12).map((ot, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm"
+                  >
+                    <MapPin size={15} className="mt-0.5 shrink-0 text-emerald-300" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-emerald-200">
+                        {ot.area || ot.name || t.outlet}
+                      </div>
+                      {ot.address && (
+                        <div className="text-xs text-white/50">{ot.address}</div>
+                      )}
+                      <div className="mt-0.5 text-xs text-white/40">
+                        {ot.lat.toFixed(4)}, {ot.lng.toFixed(4)}
+                      </div>
+                    </div>
+                    {ot.distanceKm != null && (
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${ot.lat},${ot.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent-pink hover:underline"
+                      >
+                        <Navigation size={12} />
+                        {formatDistance(ot.distanceKm)}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </motion.article>
 

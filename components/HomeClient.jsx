@@ -693,6 +693,7 @@ const nearOffers = useMemo(() => {
                           offer={o}
                           index={i}
                           distanceKm={o.distanceKm}
+                          userCoords={userCoords}
                           onFirstSave={handleFirstSave}
                         />
                       ))}
@@ -714,6 +715,7 @@ const nearOffers = useMemo(() => {
                               offer={o}
                               index={i}
                               distanceKm={o.distanceKm}
+                              userCoords={userCoords}
                               onFirstSave={handleFirstSave}
                             />
                           ))}
@@ -751,6 +753,7 @@ const nearOffers = useMemo(() => {
                                 offer={o}
                                 index={i}
                                 distanceKm={o.distanceKm}
+                                userCoords={userCoords}
                                 onFirstSave={handleFirstSave}
                               />
                             ))}
@@ -802,6 +805,7 @@ const nearOffers = useMemo(() => {
                             offer={o}
                             index={i}
                             distanceKm={o.distanceKm}
+                            userCoords={userCoords}
                             onFirstSave={handleFirstSave}
                           />
                         ))}

@@ -13,7 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { formatDistance } from "@/lib/offers";
+import { formatDistance, nearestOutlet } from "@/lib/offers";
 import Countdown from "./Countdown";
 import OfferImage from "./OfferImage";
 import PrecisionBadge from "./PrecisionBadge";
@@ -30,9 +30,15 @@ export default function OfferCard({
   offer,
   index = 0,
   distanceKm,
+  userCoords,
   onFirstSave = () => {},
 }) {
   const { t } = useApp();
+  const outlets = Array.isArray(offer.outlets) ? offer.outlets : [];
+  const nearest =
+    userCoords && outlets.length
+      ? nearestOutlet(offer, userCoords.lat, userCoords.lng)
+      : null;
   const areaLabel = (o) => {
     if (getPrecision(o) === "district" && o.district) return `${t.precisionDistrict}: ${o.district}`;
     if (o.area && o.area !== "Bangladesh") return o.area;
@@ -145,6 +151,27 @@ export default function OfferCard({
             )}
             <PrecisionBadge offer={offer} className="ml-auto" />
           </div>
+
+          {outlets.length > 0 && nearest && (
+            <div className="flex items-center gap-1 text-[11px] text-emerald-300/90">
+              <MapPin size={11} className="shrink-0" />
+              <span className="truncate">
+                {t.nearestOutlet}: {nearest.area || t.outlet} · {formatDistance(nearest.distanceKm)}
+              </span>
+              <span className="ml-auto shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 font-semibold text-emerald-200">
+                {outlets.length} {t.outlets}
+              </span>
+            </div>
+          )}
+          {outlets.length > 0 && !nearest && (
+            <div className="flex items-center gap-1 text-[11px] text-emerald-300/90">
+              <MapPin size={11} className="shrink-0" />
+              <span className="truncate">{t.outlets}</span>
+              <span className="ml-auto shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 font-semibold text-emerald-200">
+                {outlets.length}
+              </span>
+            </div>
+          )}
 
           <h3 className="line-clamp-2 font-bold leading-snug text-white group-hover:text-white/90">
             {offer.title}
