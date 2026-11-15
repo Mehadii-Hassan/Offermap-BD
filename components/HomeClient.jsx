@@ -312,8 +312,17 @@ const nearOffers = useMemo(() => {
   // Read the ?category= param once on mount so refreshing keeps the selection.
   useEffect(() => {
     try {
-      const cat = new URL(window.location.href).searchParams.get("category");
+      const url = new URL(window.location.href);
+      const cat = url.searchParams.get("category");
       if (cat && cat !== "All") setActiveCategory(cat);
+      // Shareable location: ?lat=..&lng=..&place=..
+      const lat = parseFloat(url.searchParams.get("lat"));
+      const lng = parseFloat(url.searchParams.get("lng"));
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        setUserCoords({ lat, lng });
+        setLocName(url.searchParams.get("place") || "");
+        setView("list");
+      }
     } catch (e) {
       /* ignore */
     }
