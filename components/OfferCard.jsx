@@ -17,6 +17,7 @@ import { formatDistance } from "@/lib/offers";
 import Countdown from "./Countdown";
 import OfferImage from "./OfferImage";
 import PrecisionBadge from "./PrecisionBadge";
+import { getPrecision } from "@/lib/precision";
 import { getSavedIds, toggleSavedId } from "@/lib/storage";
 
 export function isEndingSoon(offer) {
@@ -32,6 +33,12 @@ export default function OfferCard({
   onFirstSave = () => {},
 }) {
   const { t } = useApp();
+  const areaLabel = (o) => {
+    if (getPrecision(o) === "district" && o.district) return `${t.precisionDistrict}: ${o.district}`;
+    if (o.area && o.area !== "Bangladesh") return o.area;
+    if (o.district) return o.district;
+    return o.division || "Bangladesh";
+  };
   const [saved, setSaved] = useState(
     () => typeof window !== "undefined" && getSavedIds().includes(String(offer.id))
   );
@@ -128,7 +135,7 @@ export default function OfferCard({
         <div className="flex flex-1 flex-col gap-2 p-4">
           <div className="flex items-center gap-1.5 text-xs text-white/50">
             <MapPin size={13} />
-            <span>{offer.area}</span>
+            <span className="truncate">{areaLabel(offer)}</span>
             {distanceKm != null && (
               <>
                 <span>·</span>
