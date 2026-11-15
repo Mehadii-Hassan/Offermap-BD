@@ -69,10 +69,9 @@ export default function OfferCard({
         className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md glow-hover"
       >
         {/* Image */}
-        <div className="relative h-44 w-full overflow-hidden">
+        <div className="relative w-full">
           <OfferImage
             offer={offer}
-            urlClassName="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             placeholderClassName="h-full w-full"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />

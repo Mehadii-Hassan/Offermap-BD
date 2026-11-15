@@ -281,11 +281,13 @@ export default function AdminClient() {
                 className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5"
               >
                 <div className="flex">
-                  <OfferImage
-                    offer={o}
-                    urlClassName="h-28 w-28 shrink-0 object-cover sm:h-32 sm:w-40"
-                    placeholderClassName="h-28 w-28 shrink-0 sm:h-32 sm:w-40"
-                  />
+                  <div className="shrink-0">
+                    <OfferImage
+                      offer={o}
+                      ratioClass="h-28 w-28 sm:h-32 sm:w-40"
+                      placeholderClassName=""
+                    />
+                  </div>
                   <div className="min-w-0 flex-1 p-3">
                     <div className="font-bold leading-snug">{o.title}</div>
                     <div className="mt-1 text-xs text-white/60">{o.shopName}</div>

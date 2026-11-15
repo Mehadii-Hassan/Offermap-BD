@@ -54,11 +54,11 @@ function makeClusterIcon(size) {
 function renderPopup(offer, userCoords, t) {
   return (
     <div className="min-w-[180px]">
-      <div className="mb-1 h-20 w-full overflow-hidden rounded-lg">
+      <div className="mb-1 w-full overflow-hidden rounded-lg">
         <OfferImage
           offer={offer}
-          urlClassName="h-full w-full object-cover"
-          placeholderClassName="h-full w-full"
+          ratioClass="h-20 w-full"
+          placeholderClassName=""
         />
       </div>
       <div className="mb-1 text-xs text-gray-600">

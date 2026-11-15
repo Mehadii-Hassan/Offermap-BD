@@ -788,11 +788,11 @@ function TopStrip({ offer, rank }) {
           whileHover={{ y: -4 }}
           className="flex h-full w-full items-center gap-3 rounded-2xl glass p-3 glow-hover"
         >
-          <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-xl">
+          <div className="relative w-16 shrink-0 overflow-hidden rounded-xl">
             <OfferImage
               offer={offer}
-              urlClassName="h-full w-full object-cover"
-              placeholderClassName="h-full w-full"
+              ratioClass="h-20 w-16"
+              placeholderClassName=""
             />
             <span className="absolute -left-1 -top-1">
               <span className="grid h-6 w-6 place-items-center rounded-full bg-gradient-to-tr from-accent-orange to-accent-pink text-xs font-bold">

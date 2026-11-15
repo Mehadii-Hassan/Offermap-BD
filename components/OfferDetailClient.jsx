@@ -129,12 +129,12 @@ export default function OfferDetailClient({ offer }) {
         className="overflow-hidden rounded-3xl border border-white/10 bg-white/5"
       >
         {/* Image */}
-        <div className="relative h-64 sm:h-80">
+        <div className="relative">
           <OfferImage
             offer={offer}
             eager
-            urlClassName="h-full w-full object-cover"
-            placeholderClassName="h-full w-full"
+            ratioClass="h-64 sm:h-80"
+            placeholderClassName=""
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
 
