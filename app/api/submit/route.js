@@ -3,6 +3,7 @@ import { unmapOffer } from "@/lib/supabase";
 import { supabaseAdmin, hasAdminEnv } from "@/lib/supabaseAdmin";
 import { CATEGORIES, PAYMENT_METHODS } from "@/lib/offers";
 import { isInsideBangladesh } from "@/lib/bd-locations";
+import { getPrecision } from "@/lib/precision";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { logEvent } from "@/lib/activity";
 
@@ -178,6 +179,7 @@ export async function POST(req) {
     .from("offers")
     .insert({
       ...row,
+      location_precision: getPrecision(row),
       status,
       source: "user",
       source_url: null,

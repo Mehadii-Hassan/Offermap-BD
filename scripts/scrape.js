@@ -191,6 +191,36 @@ const candidates = [];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Gemini call with a 429 backoff: retry once after 60s, then stop calling
+// Gemini for the rest of this run (the caller sets geminiRateLimited).
+async function geminiFetch(body) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, text: data.candidates?.[0]?.content?.parts?.[0]?.text || "" };
+    }
+    if (res.status === 429 && attempt === 0) {
+      console.warn("⏳ Gemini rate limit (429). Retrying once after 60s…");
+      await sleep(60000);
+      continue;
+    }
+    const raw = await res.text();
+    if (res.status === 429) {
+      return { ok: false, rateLimited: true, status: res.status };
+    }
+    throw new Error(`Gemini failed (${res.status}): ${raw.slice(0, 300)}`);
+  }
+  return { ok: false, rateLimited: true, status: 429 };
+}
+
 function nowISO() {
   return new Date().toISOString();
 }
@@ -365,30 +395,21 @@ JSON response format:
   }
 ]`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
-      }),
-    }
-  );
-  if (!res.ok) {
-    const body = await res.text();
-    if (res.status === 429) {
+  const resp = await geminiFetch({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+  });
+  if (!resp.ok) {
+    if (resp.rateLimited) {
       geminiRateLimited = true;
       console.warn(
         `⚠️ Gemini rate limit (429). Stopping Gemini calls this run; ${geminiCalls - 1} calls already made.`
       );
       return [];
     }
-    throw new Error(`Gemini failed (${res.status}): ${body.slice(0, 300)}`);
+    throw new Error(`Gemini failed (${resp.status})`);
   }
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+  const text = resp.text;
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
   let parsed;
   try {
@@ -506,33 +527,24 @@ Extract ALL unique offers/deals you can find on this listing page. Return a JSON
 - imageUrl: best https image if available, else empty string
 
 Return ONLY a valid JSON array (no markdown). If nothing usable, return [].`;
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
-        }),
-      }
-    );
+    const resp = await geminiFetch({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    });
     geminiCalls += 1;
     if (GEMINI_DELAY_MS > 0) await sleep(GEMINI_DELAY_MS);
-    if (!res.ok) {
-      const body = await res.text();
-      if (res.status === 429) {
+    if (!resp.ok) {
+      if (resp.rateLimited) {
         geminiRateLimited = true;
         console.warn(
           `⚠️ Gemini rate limit (429). Stopping Gemini calls this run; ${geminiCalls - 1} calls already made.`
         );
         return all;
       }
-      console.warn(`⚡ Gemini page call failed (${res.status}): ${body.slice(0, 200)}`);
+      console.warn(`⚡ Gemini page call failed (${resp.status})`);
       continue;
     }
-    const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    const text = resp.text;
     const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
     let parsed;
     try {
@@ -1252,6 +1264,7 @@ async function main() {
         errors: report.errors.length,
         tavily_credits: creditsThisRun,
         gemini_calls: geminiCalls,
+        rate_limited: geminiRateLimited,
         mode: "live",
       });
     } catch (e) {

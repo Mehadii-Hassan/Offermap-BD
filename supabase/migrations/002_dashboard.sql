@@ -103,8 +103,9 @@ LANGUAGE sql STABLE AS $$
     (SELECT coalesce(json_agg(row_to_json(t) ORDER BY t.created_at DESC), '[]'::json) FROM
        (SELECT id, event, offer_id, source, detail, created_at FROM activity_log ORDER BY created_at DESC LIMIT 20) t) AS events,
     (SELECT coalesce(json_agg(row_to_json(s) ORDER BY s.started_at DESC), '[]'::json) FROM
-       (SELECT id, started_at, queries, pages, found, inserted, skipped, duplicates, errors, mode
-          FROM scrape_runs ORDER BY started_at DESC LIMIT 10) s) AS scrape_runs;
+(SELECT id, started_at, queries, pages, found, inserted, skipped, duplicates, errors, mode,
+           rate_limited
+      FROM scrape_runs ORDER BY started_at DESC LIMIT 10) s) AS scrape_runs;
 $$;
 
 -- ---------------------------------------------------------------------------

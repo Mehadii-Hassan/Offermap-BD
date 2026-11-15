@@ -1,8 +1,9 @@
 // backfill-precision.js - compute and persist location_precision for offers
-// that don't have it yet. Resumable, processes in pages.
+// that are missing it (null or empty). Resumable, processes in pages.
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { createClient } from "@supabase/supabase-js";
+import { DISTRICTS } from "../lib/bd-locations.js";
 
 const root = process.cwd();
 if (existsSync(join(root, ".env.local"))) {
@@ -27,11 +28,18 @@ function getPrecision(offer) {
   const area = String(offer.area || "").trim().toLowerCase();
   const addr = String(offer.address || "").trim().toLowerCase();
   if (addr.includes("(approximate location)")) return "district";
-  if (
-    addr &&
-    addr !== "bangladesh" &&
-    (addr.includes(",") || offer.district)
-  ) {
+  // Exact match to a district centre -> 'district'.
+  if (offer.lat != null && offer.lng != null) {
+    for (const d of DISTRICTS) {
+      if (
+        Math.abs(d.lat - offer.lat) < 0.0001 &&
+        Math.abs(d.lng - offer.lng) < 0.0001
+      ) {
+        return "district";
+      }
+    }
+  }
+  if (addr && addr !== "bangladesh" && (addr.includes(",") || offer.district)) {
     return "exact";
   }
   if (area && area !== "bangladesh" && area !== String(offer.district || "").toLowerCase() && area !== String(offer.division || "").toLowerCase()) {
@@ -44,10 +52,10 @@ async function main() {
   const { data, error } = await sb
     .from("offers")
     .select("id, area, address, district, division, lat, lng, location_precision")
-    .is("location_precision", null);
+    .or("location_precision.is.null,location_precision.eq.");
   if (error) { console.error("Read failed:", error.message); process.exit(1); }
   const rows = data || [];
-  console.log(`Found ${rows.length} offer(s) without location_precision.`);
+  console.log(`Found ${rows.length} offer(s) with missing/empty location_precision.`);
   let updated = 0;
   for (const r of rows) {
     const p = getPrecision(r);

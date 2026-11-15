@@ -2,8 +2,7 @@ name: Daily Scrape
 
 on:
   schedule:
-    - cron: "0 2 * * *" # daily 02:00 UTC (real run, auto-publishes)
-    - cron: "0 14 * * *" # second daily batch 14:00 UTC
+    - cron: "0 2 * * *" # daily 02:00 UTC once per day to keep within free limits
   workflow_dispatch:
     inputs:
       dry_run:
@@ -39,7 +38,7 @@ jobs:
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           CRON_SECRET=${{ secrets.CRON_SECRET }}
           MAX_QUERIES_PER_RUN=30
-          MAX_PAGES_PER_RUN=120
+          MAX_PAGES_PER_RUN=80
           TAVILY_DEPTH=basic
           TAVILY_MONTHLY_BUDGET=900
           SCRAPE_RESULTS=5
@@ -55,7 +54,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && 'true' || 'false' }}
           MAX_QUERIES_PER_RUN: "30"
-          MAX_PAGES_PER_RUN: "120"
+          MAX_PAGES_PER_RUN: "80"
 
       - name: Upload scrape report
         if: always()

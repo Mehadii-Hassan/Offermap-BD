@@ -261,6 +261,7 @@ export default function AdminDashboard({ onDeleteExpired, busyDelete }) {
                     {bad ? <FileWarning size={13} /> : <CheckCircle2 size={13} className="text-emerald-300" />}
                     <span className="truncate">
                       {new Date(s.started_at).toLocaleString()} · inserted {s.inserted} · found {s.found} · {s.mode}
+                      {s.rate_limited && <span className="ml-1 text-amber-300"> · ended early: rate limited (429)</span>}
                     </span>
                   </li>
                 );

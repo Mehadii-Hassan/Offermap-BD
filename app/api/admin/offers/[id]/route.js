@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { hasAdminEnv, adminUpdateOffer, adminDeleteOffer, adminGetOfferById } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { logEvent } from "@/lib/activity";
+import { getPrecision } from "@/lib/precision";
 import { deleteStoredImage } from "@/lib/image-store";
 
 export async function PATCH(req, { params }) {
@@ -42,6 +43,11 @@ export async function PATCH(req, { params }) {
       if (body.valid_till) updates.valid_till = body.valid_till;
       if (body.shop_name) updates.shop_name = String(body.shop_name).slice(0, 120);
       if (body.description) updates.description = String(body.description).slice(0, 2000);
+      {
+        // Keep location_precision set/consistent on every edit.
+        const cur = await adminGetOfferById(id);
+        updates.location_precision = cur ? getPrecision(cur) : undefined;
+      }
       break;
     default:
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });

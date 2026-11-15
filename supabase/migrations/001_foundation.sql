@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
   errors int,
   tavily_credits int,
   gemini_calls int,
+  rate_limited boolean DEFAULT false,
   mode text
 );
 
@@ -60,5 +61,8 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'offers' AND column_name = 'source_image_url') THEN
     ALTER TABLE offers ADD COLUMN source_image_url text;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'scrape_runs' AND column_name = 'rate_limited') THEN
+    ALTER TABLE scrape_runs ADD COLUMN rate_limited boolean DEFAULT false;
   END IF;
 END $$;

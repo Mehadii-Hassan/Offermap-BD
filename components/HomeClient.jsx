@@ -55,6 +55,7 @@ export default function HomeClient() {
   const [places, setPlaces] = useState([]);
   const [activePlaceId, setActivePlaceIdState] = useState("");
   const sentinelRef = useRef(null);
+  const [elsewhereExpanded, setElsewhereExpanded] = useState(false);
 
   const [filters, setFilters] = useState({
     category: "All",
@@ -139,8 +140,9 @@ export default function HomeClient() {
         }
         const d = o.distanceKm ?? Infinity;
         if (filters.radius !== "Any" && d > radiusInfo.radius) continue;
-        // District-precision offers are not "near you" below 25 km.
-        if (radiusInfo.radius < 25 && getPrecision(o) === "district") continue;
+        // District-precision offers are not "near you": their pin is only the
+        // district centre, so they are shown separately under "Elsewhere in".
+        if (getPrecision(o) === "district") continue;
         nearby.push(o);
       }
       nearby.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
@@ -183,6 +185,7 @@ const categoryCounts = useMemo(() => {
   const m = {};
   const inRadius = (o) => {
     if (o.nationwide === true) return true;
+    if (userCoords != null && getPrecision(o) === "district") return false;
     if (userCoords == null || radiusInfo.radius == null) return true;
     return (distanceToOffer(o, userCoords.lat, userCoords.lng) ?? Infinity) <= radiusInfo.radius;
   };
@@ -194,7 +197,37 @@ const categoryCounts = useMemo(() => {
   return m;
 }, [allOffers, userCoords, radiusInfo.radius]);
 
-// A category filter reused by all sections + lists.
+const offerMatchesFilters = (o) => {
+    if (activeCategory !== "All" && o.category !== activeCategory) return false;
+    if (filters.division !== "All" && o.nationwide !== true && o.division !== filters.division) return false;
+    if (filters.district !== "All" && o.nationwide !== true && o.district !== filters.district) return false;
+    if (filters.payment !== "Any" && o.paymentMethod !== filters.payment) return false;
+    return true;
+  };
+
+  // Distinct offers (district-precision, not nationwide) shown in a collapsed
+  // "Elsewhere in <district>" section below the nearby sections: their pin is
+  // only the district centre, so they must not appear in any km-based count.
+  const elsewhere = useMemo(() => {
+    if (userCoords == null) return [];
+    const groups = new Map();
+    for (const o of allOffers) {
+      if (o.nationwide === true) continue;
+      if (getPrecision(o) !== "district") continue;
+      if (!offerMatchesFilters(o)) continue;
+      const d = distanceToOffer(o, userCoords.lat, userCoords.lng);
+      if (filters.radius !== "Any" && (d ?? Infinity) > radiusInfo.radius) continue;
+      const district = o.district || t.elsewhereIn;
+      if (!groups.has(district)) groups.set(district, []);
+      groups.get(district).push({ ...o, distanceKm: d });
+    }
+    return [...groups.entries()].map(([district, list]) => ({
+      district,
+      list: list.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity) || b.hotScore - a.hotScore),
+    }));
+  }, [allOffers, userCoords, filters, activeCategory, radiusInfo.radius, t.elsewhereIn]);
+
+  // A category filter reused by all sections + lists.
 const appliesCategory = (o) =>
   activeCategory === "All" || o.category === activeCategory;
 
@@ -229,7 +262,12 @@ const featured = useMemo(
 const nearOffers = useMemo(() => {
   if (!userCoords) return [];
   return [...allOffers]
-    .filter(appliesCategory)
+    .filter((o) => {
+      if (!appliesCategory(o)) return false;
+      // District-precision offers are not "near you" — district centre only.
+      if (!o.nationwide && getPrecision(o) === "district") return false;
+      return true;
+    })
     .map((o) => ({
       ...o,
       distanceKm: distanceToOffer(o, userCoords.lat, userCoords.lng),
@@ -688,6 +726,39 @@ const nearOffers = useMemo(() => {
                       </div>
                     );
                   })}
+
+                {/* Elsewhere in <district> — district-precision offers only */}
+                {userCoords != null && elsewhere.length > 0 && (
+                  <div className="mb-10">
+                    <button
+                      onClick={() => setElsewhereExpanded((v) => !v)}
+                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-semibold text-white/80 hover:bg-white/10 transition"
+                      aria-expanded={elsewhereExpanded}
+                    >
+                      <span>
+                        {t.elsewhereIn} ({elsewhere.reduce((n, g) => n + g.list.length, 0)})
+                      </span>
+                      <span className="text-white/50">{elsewhereExpanded ? "▴" : "▾"}</span>
+                    </button>
+                    {elsewhereExpanded &&
+                      elsewhere.map((group) => (
+                        <div key={group.district} className="mt-4">
+                          <SectionHeading emoji="📍" title={`${t.elsewhereIn} ${group.district} (${group.list.length})`} />
+                          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                            {group.list.slice(0, 12).map((o, i) => (
+                              <OfferCard
+                                key={o.id}
+                                offer={o}
+                                index={i}
+                                distanceKm={o.distanceKm}
+                                onFirstSave={handleFirstSave}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
 
                 {/* Filtered results / all deals */}
                 <div className="mb-10">
