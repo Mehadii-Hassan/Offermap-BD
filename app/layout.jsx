@@ -1,5 +1,6 @@
 import "./globals.css";
 import { AppProvider } from "@/lib/app-context";
+import VisitTracker from "@/components/VisitTracker";
 
 export const metadata = {
   title: {
@@ -48,6 +49,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <AppProvider>{children}</AppProvider>
+        <VisitTracker />
       </body>
     </html>
   );

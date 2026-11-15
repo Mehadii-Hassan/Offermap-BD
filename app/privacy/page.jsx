@@ -26,6 +26,10 @@ const sections = [
     body: "We display OpenStreetMap maps and Unsplash image placeholders. 'Get Directions' opens your default maps app. Share buttons open WhatsApp or Messenger directly on your device. These services have their own privacy policies.",
   },
   {
+    title: "4.1 Anonymous visit statistics",
+    body: "We count anonymous page views to understand which offers are popular. This uses a random visitor ID stored in your browser and sends only the page you visited, the page you came from, and an approximate country/city derived from your connection. It does not identify you, and we never combine it with your location or any saved content.",
+  },
+  {
     title: "5. Advertising",
     body: "We plan to display advertising to keep OfferMap BD free. Where ads appear, the ad networks follow their own privacy policies. This policy will be updated to clearly describe ad partners if and when they are added.",
   },
