@@ -19,6 +19,7 @@
     "scrape": "node scripts/scrape.js",
     "crawl:direct": "node scripts/crawl-direct.js",
     "precision:upgrade": "node scripts/precision-upgrade.js",
+    "quality:audit": "node scripts/quality-audit.js",
     "scrape:dry": "SCRAPE_DRY_RUN=true node scripts/scrape.js"
   },
   "dependencies": {
