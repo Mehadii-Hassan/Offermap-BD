@@ -33,3 +33,6 @@ test-results/
 playwright-report/
 blob-report/
 
+# runtime outlet-brand cache
+.outlet-brands.json
+
