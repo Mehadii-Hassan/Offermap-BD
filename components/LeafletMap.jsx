@@ -104,6 +104,7 @@ function ClusterLayer({ offers, userCoords, selectedId, onSelect }) {
 
   const clusters = new Map();
   for (const o of offers) {
+    if (!Number.isFinite(o.lat) || !Number.isFinite(o.lng)) continue;
     const key = `${Math.floor(o.lat / cell)}:${Math.floor(o.lng / cell)}`;
     if (!clusters.has(key)) clusters.set(key, []);
     clusters.get(key).push(o);

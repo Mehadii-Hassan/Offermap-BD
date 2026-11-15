@@ -237,7 +237,10 @@ async function resolveLocation(o) {
   const district = String(o.district || "").trim();
   const address = String(o.address || "").trim();
   const shop = String(o.shopName || "").trim();
-  if (o.nationwide === true) return { lat: null, lng: null, area: o.area || "Bangladesh", nationwide: true };
+  if (o.nationwide === true) {
+    // Nationwide offers still need a valid coordinate for the map: use BD center.
+    return { lat: 23.6850, lng: 90.3563, area: o.area || "Bangladesh", nationwide: true };
+  }
   // Nominatim (max 1 req/s with proper UA).
   await sleep(1000);
   const trySearch = async (q) => {
