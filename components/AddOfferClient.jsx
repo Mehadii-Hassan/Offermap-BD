@@ -264,6 +264,33 @@ export default function AddOfferClient() {
     };
   }, []);
 
+  // BATCH H6: pre-set the pin from /add?lat=..&lng=..&place=.. (the empty-state
+  // card links here with the chosen place).
+  useEffect(() => {
+    try {
+      const u = new URL(window.location.href);
+      const lat = parseFloat(u.searchParams.get("lat"));
+      const lng = parseFloat(u.searchParams.get("lng"));
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        setLocation(lat, lng);
+        setMapCenter({ lat, lng });
+        setMapZoom(14);
+        const place = u.searchParams.get("place");
+        if (place) {
+          setFormArea(place);
+          setFormAddress(place);
+        } else {
+          nominatimReverse(lat, lng, lang).then((data) => {
+            if (data && data.display_name) setFormAddress(data.display_name);
+          });
+        }
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const resetForm = useCallback(() => {
     setFormTitle("");
     setFormShopName("");

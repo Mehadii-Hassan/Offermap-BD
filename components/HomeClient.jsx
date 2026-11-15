@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { List, Map as MapIcon, X } from "lucide-react";
+import { List, Map as MapIcon, X, Plus, MessageCircle, Share2 } from "lucide-react";
 import Hero from "./Hero";
 import FilterBar from "./FilterBar";
 import SectionHeading from "./SectionHeading";
@@ -178,6 +179,18 @@ export default function HomeClient() {
     ];
     return sections.map((s) => ({ ...s, list: s.list.filter((o) => o.distanceKm <= s.max) }));
   }, [filteredList, userCoords, t]);
+
+  // BATCH H6: fewer than 5 offers within 5 km -> show the empty-state card.
+  const near5Offers = useMemo(() => {
+    if (userCoords == null) return [];
+    return allOffers.filter(
+      (o) =>
+        !o.nationwide &&
+        getPrecision(o) !== "district" &&
+        (distanceToOffer(o, userCoords.lat, userCoords.lng) ?? Infinity) <= 5
+    );
+  }, [allOffers, userCoords]);
+  const showEmptyStateCard = near5Offers.length > 0 && near5Offers.length < 5;
 
   // Derive the curated sections from the single fetched list.
   // Offer count per category (normalized) for the chips.
@@ -728,6 +741,40 @@ const nearOffers = useMemo(() => {
                       </div>
                     );
                   })}
+
+                {/* BATCH H6: empty state when very few offers are within 5 km */}
+                {userCoords != null && showEmptyStateCard && (
+                  <div className="mb-10 overflow-hidden rounded-2xl border border-dashed border-emerald-500/40 bg-emerald-500/10 p-5 text-center">
+                    <div className="text-base font-bold text-emerald-200">
+                      {t.emptyStateTitle.replace("{place}", locName || t.nearYouDerived)}
+                    </div>
+                    <div className="mt-1 text-sm text-emerald-200/70">{t.emptyStateBody}</div>
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                      <Link
+                        href={`/add?lat=${userCoords.lat}&lng=${userCoords.lng}&place=${encodeURIComponent(locName || "")}`}
+                        className="inline-flex items-center gap-1 rounded-xl bg-gradient-to-tr from-accent-orange to-accent-pink px-4 py-2.5 text-sm font-bold text-white transition"
+                      >
+                        <Plus size={15} /> {t.emptyStateAdd}
+                      </Link>
+                      <a
+                        href={`https://wa.me/?text=${encodeURIComponent(`${t.emptyStateTitle.replace("{place}", locName || "")} ${window.location.origin}/?lat=${userCoords.lat}&lng=${userCoords.lng}&place=${encodeURIComponent(locName || "")}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2.5 text-sm font-bold text-emerald-200 transition hover:bg-emerald-500/25"
+                      >
+                        <MessageCircle size={15} /> {t.emptyStateShare}
+                      </a>
+                      <a
+                        href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/?lat=${userCoords.lat}&lng=${userCoords.lng}&place=${encodeURIComponent(locName || "")}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-xl border border-blue-500/40 bg-blue-500/15 px-4 py-2.5 text-sm font-bold text-blue-200 transition hover:bg-blue-500/25"
+                      >
+                        <Share2 size={15} /> {t.emptyStateShare}
+                      </a>
+                    </div>
+                  </div>
+                )}
 
                 {/* Elsewhere in <district> — district-precision offers only */}
                 {userCoords != null && elsewhere.length > 0 && (
