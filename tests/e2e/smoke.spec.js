@@ -16,6 +16,8 @@ async function gotoNoErrors(page, path) {
 test("home loads with no console errors and chips work", async ({ page }) => {
   const errors = await gotoNoErrors(page, "/");
   const chips = page.locator(".no-scrollbar button");
+  await chips.first().waitFor({ state: "attached", timeout: 30000 });
+  await page.waitForTimeout(1000);
   const n = await chips.count();
   expect(n).toBeGreaterThanOrEqual(2);
   expect(errors).toEqual([]);

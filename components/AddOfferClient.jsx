@@ -339,7 +339,8 @@ export default function AddOfferClient() {
         !formDiscount.trim() ||
         !formArea.trim() ||
         !formValidTill ||
-        !formDescription.trim()
+        !formDescription.trim() ||
+        !formAddress.trim()
       ) {
         setError(t.fieldRequired);
         return;
@@ -627,6 +628,12 @@ export default function AddOfferClient() {
             markerLabel={formArea}
             markerAddress={formAddress}
           />
+
+          {(formArea || formAddress) && (
+            <p className="mt-2 text-sm font-semibold text-emerald-300">
+              📍 {formArea || formAddress}
+            </p>
+          )}
 
           <textarea
             className={`${inputCls} mt-3 resize-none`}
