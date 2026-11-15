@@ -17,6 +17,7 @@
     "cleanup": "node scripts/cleanup-expired.js",
     "test:e2e": "npm run build && playwright test",
     "scrape": "node scripts/scrape.js",
+    "crawl:direct": "node scripts/crawl-direct.js",
     "scrape:dry": "SCRAPE_DRY_RUN=true node scripts/scrape.js"
   },
   "dependencies": {
