@@ -23,6 +23,8 @@ import {
 import { getGeo, setGeo, wasAsked, markAsked } from "@/lib/geo";
 import { DIVISIONS, districtNames, districtInfo } from "@/lib/bd-locations";
 import { getPrecision } from "@/lib/precision";
+import { loadPlaces, addPlace, renamePlace, removePlace, getActivePlaceId, setActivePlaceId } from "@/lib/places";
+import MyPlaces from "./MyPlaces";
 
 const CategoryChips = dynamic(() => import("./CategoryChips"), {
   ssr: false,
@@ -50,6 +52,8 @@ export default function HomeClient() {
   const [manualDist, setManualDist] = useState("");
   const [locName, setLocName] = useState("");
   const [showLocPicker, setShowLocPicker] = useState(false);
+  const [places, setPlaces] = useState([]);
+  const [activePlaceId, setActivePlaceIdState] = useState("");
   const sentinelRef = useRef(null);
 
   const [filters, setFilters] = useState({
@@ -328,7 +332,64 @@ const nearOffers = useMemo(() => {
     }
   }, []);
 
-  // Paginate the list 24 at a time; reset when filters/location change.
+  // Load saved places and restore the active one.
+  useEffect(() => {
+    try {
+      setPlaces(loadPlaces());
+      const active = getActivePlaceId();
+      if (active) {
+        const found = loadPlaces().find((p) => p.id === active);
+        if (found) {
+          setActivePlaceIdState(active);
+          setUserCoords({ lat: found.lat, lng: found.lng });
+          setLocName(found.name);
+        }
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- MY PLACES handlers ----
+  function handlePlaceSelect(p) {
+    setUserCoords({ lat: p.lat, lng: p.lng });
+    setLocName(p.name);
+    setActivePlaceIdState(p.id);
+    setActivePlaceId(p.id);
+    setView("list");
+    setSelectedMapId(null);
+  }
+  function handleAddPlace(name) {
+    const list = addPlace(name, userCoords || { lat: 23.8103, lng: 90.4125 });
+    setPlaces(list);
+  }
+  function handleRename(id, name) {
+    setPlaces(renamePlace(id, name));
+  }
+  function handleRemove(id) {
+    setPlaces(removePlace(id));
+    if (id === activePlaceId) {
+      setActivePlaceIdState("");
+      setActivePlaceId("");
+      setLocName("");
+    }
+  }
+  function handleGps() {
+    if (typeof navigator !== "undefined" && "geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserCoords(c);
+          setGeo(c);
+          setLocName("");
+          setActivePlaceIdState("");
+          setActivePlaceId("");
+        },
+        () => {}
+      );
+    }
+  }
   useEffect(() => {
     setVisibleCount(24);
   }, [userCoords, filters, activeCategory, searchRes != null]);
@@ -354,6 +415,16 @@ const nearOffers = useMemo(() => {
   return (
     <>
       <Hero onSearch={setQuery} onNearMe={handleNearMe} />
+
+      <MyPlaces
+        places={places}
+        active={activePlaceId}
+        onSelect={handlePlaceSelect}
+        onGps={handleGps}
+        onAdd={handleAddPlace}
+        onRename={handleRename}
+        onRemove={handleRemove}
+      />
 
       {/* Location bar */}
       <div className="mx-auto max-w-6xl px-4 pt-3">
