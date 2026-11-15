@@ -16,6 +16,7 @@ import { useApp } from "@/lib/app-context";
 import { formatDistance } from "@/lib/offers";
 import Countdown from "./Countdown";
 import OfferImage from "./OfferImage";
+import PrecisionBadge from "./PrecisionBadge";
 import { getSavedIds, toggleSavedId } from "@/lib/storage";
 
 export function isEndingSoon(offer) {
@@ -136,6 +137,7 @@ export default function OfferCard({
                 </span>
               </>
             )}
+            <PrecisionBadge offer={offer} className="ml-auto" />
           </div>
 
           <h3 className="line-clamp-2 font-bold leading-snug text-white group-hover:text-white/90">

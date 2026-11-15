@@ -32,6 +32,7 @@ import MapView from "./MapView";
 import { getSavedIds, toggleSavedId, getVotedType, setVotedType } from "@/lib/storage";
 import Confetti from "./Confetti";
 import OfferImage from "./OfferImage";
+import PrecisionBadge from "./PrecisionBadge";
 
 export default function OfferDetailClient({ offer }) {
   const { t } = useApp();
@@ -167,6 +168,7 @@ export default function OfferDetailClient({ offer }) {
               <span>{offer.shopName}</span>
               <span className="inline-flex items-center gap-1">
                 <MapPin size={13} className="text-accent-orange" /> {offer.area}
+                <PrecisionBadge offer={offer} className="ml-2" />
               </span>
               {userDistance != null && (
                 <span className="inline-flex items-center gap-1 font-semibold text-white/80">

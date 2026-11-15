@@ -22,6 +22,7 @@ import {
 } from "@/lib/offers";
 import { getGeo, setGeo, wasAsked, markAsked } from "@/lib/geo";
 import { DIVISIONS, districtNames, districtInfo } from "@/lib/bd-locations";
+import { getPrecision } from "@/lib/precision";
 
 const CategoryChips = dynamic(() => import("./CategoryChips"), {
   ssr: false,
@@ -146,6 +147,8 @@ export default function HomeClient() {
         }
         const d = o.distanceKm ?? Infinity;
         if (filters.radius !== "Any" && d > radiusInfo.radius) continue;
+        // District-precision offers are not "near you" below 25 km.
+        if (radiusInfo.radius < 25 && getPrecision(o) === "district") continue;
         nearby.push(o);
       }
       nearby.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
