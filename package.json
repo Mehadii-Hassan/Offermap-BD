@@ -11,6 +11,8 @@
     "clean-samples": "node scripts/clean-samples.js",
     "reset-scraped": "node scripts/reset-scraped.js",
     "migrate": "node scripts/migrate.js",
+    "fix": "node scripts/fix-categories.js",
+    "backfill-precision": "node scripts/backfill-precision.js",
     "cleanup": "node scripts/cleanup-expired.js",
     "test:e2e": "npm run build && playwright test",
     "scrape": "node scripts/scrape.js",
