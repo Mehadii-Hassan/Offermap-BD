@@ -132,10 +132,13 @@ export default function HomeClient() {
 
     if (userCoords != null) {
       // Nearby (within radius, nearest first), then nationwide offers last.
+      // An offer WITH real outlets is location-based: it sorts by nearest outlet
+      // (BATCH H5) instead of being treated as a pure nationwide offer.
       const nearby = [];
       const nationwide = [];
       for (const o of withDist) {
-        if (o.nationwide === true) {
+        const hasOutlets = Array.isArray(o.outlets) && o.outlets.length > 0;
+        if (o.nationwide === true && !hasOutlets) {
           nationwide.push(o);
           continue;
         }
@@ -175,7 +178,7 @@ export default function HomeClient() {
       { key: "veryClose", title: t.veryClose, max: 2, list: inRadius.filter((o) => o.distanceKm <= 2).sort(byDistance) },
       { key: "inArea", title: t.inArea, max: 5, list: inRadius.filter((o) => o.distanceKm > 2 && o.distanceKm <= 5).sort(byDistance) },
       { key: "inCity", title: t.inCity, max: 25, list: inRadius.filter((o) => o.distanceKm > 5 && o.distanceKm <= 25).sort(byDistance) },
-      { key: "nationwide", title: t.nationwideOnline, max: 200, list: filteredList.filter((o) => o.nationwide === true).sort(byDistance) },
+      { key: "nationwide", title: t.nationwideOnline, max: 200, list: filteredList.filter((o) => o.nationwide === true && !(Array.isArray(o.outlets) && o.outlets.length)).sort(byDistance) },
     ];
     return sections.map((s) => ({ ...s, list: s.list.filter((o) => o.distanceKm <= s.max) }));
   }, [filteredList, userCoords, t]);
@@ -190,7 +193,7 @@ export default function HomeClient() {
         (distanceToOffer(o, userCoords.lat, userCoords.lng) ?? Infinity) <= 5
     );
   }, [allOffers, userCoords]);
-  const showEmptyStateCard = near5Offers.length > 0 && near5Offers.length < 5;
+  const showEmptyStateCard = near5Offers.length < 5;
 
   // Derive the curated sections from the single fetched list.
   // Offer count per category (normalized) for the chips.
