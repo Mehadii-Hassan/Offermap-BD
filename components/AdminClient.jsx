@@ -16,8 +16,9 @@ import {
 import { useApp } from "@/lib/app-context";
 import { formatDate } from "@/lib/offers";
 import OfferImage from "./OfferImage";
+import AdminDashboard from "./AdminDashboard";
 
-const TABS = ["pending", "approved", "rejected", "scraped"];
+const TABS = ["dashboard", "pending", "approved", "rejected", "scraped"];
 
 export default function AdminClient() {
   const { t } = useApp();
@@ -26,7 +27,7 @@ export default function AdminClient() {
   const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(false);
   const [offers, setOffers] = useState([]);
-  const [tab, setTab] = useState("pending");
+  const [tab, setTab] = useState("dashboard");
   const [busyId, setBusyId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ title: "", discount_text: "", valid_till: "" });
@@ -198,13 +199,15 @@ export default function AdminClient() {
           <span className="text-gradient">{t.adminTitle}</span>
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={deleteExpired}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 bg-white/5 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/10 transition disabled:opacity-60"
-          >
-            <Trash size={15} /> {t.adminDeleteExpired}
-          </button>
+          {tab !== "dashboard" && (
+            <button
+              onClick={deleteExpired}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 bg-white/5 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/10 transition disabled:opacity-60"
+            >
+              <Trash size={15} /> {t.adminDeleteExpired}
+            </button>
+          )}
           <button
             onClick={logout}
             className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 transition"
@@ -215,20 +218,22 @@ export default function AdminClient() {
       </div>
 
       {/* Counts */}
-      <div className="mb-6 grid grid-cols-3 gap-3">
-        <div className="glass rounded-2xl p-4 text-center">
-          <div className="text-3xl font-black text-amber-300">{counts.pending}</div>
-          <div className="text-xs text-white/50">{t.adminPendingCount}</div>
+      {tab !== "dashboard" && (
+        <div className="mb-6 grid grid-cols-3 gap-3">
+          <div className="glass rounded-2xl p-4 text-center">
+            <div className="text-3xl font-black text-amber-300">{counts.pending}</div>
+            <div className="text-xs text-white/50">{t.adminPendingCount}</div>
+          </div>
+          <div className="glass rounded-2xl p-4 text-center">
+            <div className="text-3xl font-black text-emerald-300">{counts.approved}</div>
+            <div className="text-xs text-white/50">{t.adminApprovedCount}</div>
+          </div>
+          <div className="glass rounded-2xl p-4 text-center">
+            <div className="text-3xl font-black text-accent-purple">{counts.total}</div>
+            <div className="text-xs text-white/50">{t.adminTotalCount}</div>
+          </div>
         </div>
-        <div className="glass rounded-2xl p-4 text-center">
-          <div className="text-3xl font-black text-emerald-300">{counts.approved}</div>
-          <div className="text-xs text-white/50">{t.adminApprovedCount}</div>
-        </div>
-        <div className="glass rounded-2xl p-4 text-center">
-          <div className="text-3xl font-black text-accent-purple">{counts.total}</div>
-          <div className="text-xs text-white/50">{t.adminTotalCount}</div>
-        </div>
-      </div>
+      )}
 
       {/* Tabs */}
       <div className="mb-6 flex overflow-x-auto no-scrollbar gap-2">
@@ -251,21 +256,31 @@ export default function AdminClient() {
                 />
               )}
               <span className="relative">
-                {k === "pending"
-                  ? t.adminPending
-                  : k === "approved"
-                    ? t.adminApproved
-                    : k === "rejected"
-                      ? t.adminRejected
-                      : t.adminScraped}
+                {k === "dashboard"
+                  ? t.adminDashboard
+                  : k === "pending"
+                    ? t.adminPending
+                    : k === "approved"
+                      ? t.adminApproved
+                      : k === "rejected"
+                        ? t.adminRejected
+                        : t.adminScraped}
               </span>
             </button>
           );
         })}
       </div>
 
-      {/* Offer list */}
-      {filtered.length === 0 ? (
+      {/* Dashboard panel */}
+      {tab === "dashboard" ? (
+        <AdminDashboard
+          onDeleteExpired={deleteExpired}
+          busyDelete={loading}
+        />
+      ) : (
+        <>
+          {/* Offer list */}
+          {filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-6 py-16 text-center text-white/50">
           {t.adminNoOffers}
         </div>
@@ -400,6 +415,8 @@ export default function AdminClient() {
             );
           })}
         </div>
+      )}
+        </>
       )}
     </main>
   );
