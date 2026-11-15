@@ -99,17 +99,22 @@ function isGenericBrand(b) {
   return GENERIC_BRANDS.has(b);
 }
 
-// Overpass: match the brand by name / name:en / name:bn / brand anywhere in
-// Bangladesh. Exact match on the brand key (case-insensitive), region limited to
-// Bangladesh bbox. Uses "out center" so ways/relations resolve to a point.
-// Uses a manual http POST with a hard socket timeout (reliable across mirrors;
-// the global fetch/undici can stall on some Overpass instances).
+// Overpass: match the brand across Bangladesh by querying a few regional bboxes
+// (kept light to stay responsive on the slow Overpass mirrors), using nwr with
+// brand/name/name:en/name:bn/operator. Accept an element when its tag contains
+// the brand as a whole word (case-insensitive), including suffix variants like
+// "KFC Uttara" or "Aarong Dhanmondi". Endpoint fallback; one request per 2s.
 const OVERPASS_ENDPOINTS = [
   "https://overpass.osm.ch/api/interpreter",
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
-  "https://overpass.ubr.lu/api/interpreter",
+];
+
+// Regional boxes that together cover Bangladesh (s, w, n, e).
+const DIVISION_BBOXES = [
+  "(23.50,88.00,26.70,92.70)", // north + Dhaka
+  "(20.50,88.00,23.60,92.70)", // south (Khulna/Barishal/Chattogram/Sylhet belt)
 ];
 
 function overpassPost(endpoint, body, timeoutMs) {
@@ -137,49 +142,79 @@ function overpassPost(endpoint, body, timeoutMs) {
   });
 }
 
-async function overpassOutlets(brand) {
-  const escape = (s) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const keys = ["name", "name:en", "name:bn", "brand"];
-  const tagFilters = keys.map((k) => `["${k}"~"^${escape(brand)}$",i]`).join("");
-  const bbox = "(20.5,88.0,26.7,92.7)";
-  const query = `[out:json][timeout:60];(` +
-    `node${tagFilters}${bbox};` +
-    `way${tagFilters}${bbox};` +
-    `relation${tagFilters}${bbox};` +
-    `);out center ${MAX_OUTLETS};`;
+// Whole-word, case-insensitive containment of brand in a tag value.
+function tagMatches(tagValue, brand) {
+  const hay = String(tagValue || "");
+  const needle = String(brand);
+  const re = new RegExp(`(^|[^a-z0-9])${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i");
+  return re.test(hay);
+}
 
+// Query one division bbox; returns matched elements or a rateLimited flag.
+async function queryBbox(bbox, brand) {
+  const escape = (s) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const keys = ["brand", "name", "name:en", "name:bn", "operator"];
+  const parts = keys.map((k) => `nwr["${k}"~"${escape(brand)}",i]${bbox}`).join(";");
+  const query = `[out:json][timeout:90];(${parts});out center 300;`;
+  let last429 = false;
   for (const endpoint of OVERPASS_ENDPOINTS) {
-    const res = await overpassPost(endpoint, query, 20000);
-    if (!res.ok) continue;
-    if (res.status === 429) return { rateLimited: true, elements: [] };
-    if (res.status !== 200) continue;
-    let data;
-    try { data = JSON.parse(res.body); } catch { continue; }
-    const out = [];
-    for (const el of data.elements || []) {
-      const lat = el.lat ?? el.center?.lat;
-      const lng = el.lon ?? el.center?.lon;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-      if (!isInsideBangladesh(lat, lng)) continue;
+    const res = await overpassPost(endpoint, query, 30000);
+    if (res.ok && res.status === 200) {
+      let elements = [];
+      try { elements = JSON.parse(res.body).elements || []; } catch { }
+      return { rateLimited: false, elements };
+    }
+    if (res.ok && (res.status === 429 || res.status === 504)) last429 = true;
+    // slow/error mirrors: stop trying after a couple to keep the run responsive
+    if (endpoint === OVERPASS_ENDPOINTS[1]) break;
+  }
+  return { rateLimited: last429, elements: [] };
+}
+
+function elementPoint(el) {
+  const lat = el.lat ?? el.center?.lat;
+  const lng = el.lon ?? el.center?.lon;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (!isInsideBangladesh(lat, lng)) return null;
+  return { lat, lng };
+}
+
+async function overpassOutlets(brand, shouldStop) {
+  if (isGenericBrand(brand)) return { rateLimited: false, elements: [] };
+  const seen = new Set();
+  const out = [];
+  let rateLimited = false;
+  for (const bbox of DIVISION_BBOXES) {
+    if (shouldStop && shouldStop()) break;
+    const r = await queryBbox(bbox, brand);
+    if (r.rateLimited) { rateLimited = true; break; }
+    for (const el of r.elements) {
+      const p = elementPoint(el);
+      if (!p) continue;
       const t = el.tags || {};
-      const address = [
-        t["addr:street"],
-        t["addr:housenumber"],
-      ].filter(Boolean).join(", ");
+      // whole-word match across any brand/name/operator tag
+      const brandName = t["brand"] || t["name"] || t["brand:en"] || t["name:en"] || t["name:bn"] || t["operator"] || brand;
+      if (!(tagMatches(t.brand, brand) || tagMatches(t.name, brand) ||
+            tagMatches(t["name:en"], brand) || tagMatches(t["name:bn"], brand) ||
+            tagMatches(t.operator, brand))) continue;
+      const key = `${p.lat.toFixed(4)}:${p.lng.toFixed(4)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const address = [t["addr:street"], t["addr:housenumber"]].filter(Boolean).join(", ");
       const suburb = t["addr:suburb"] || t["addr:city"] || t["addr:district"] || "";
-      const full = t["addr:full"] || "";
       out.push({
-        lat,
-        lng,
-        name: t["name"] || t["name:en"] || t["brand:en"] || t["brand"] || brand,
-        address: (address || full || "").trim(),
+        lat: p.lat,
+        lng: p.lng,
+        name: brandName,
+        address: (address || t["addr:full"] || "").trim(),
         area: suburb,
         source: "osm",
       });
+      if (out.length >= MAX_OUTLETS) return { rateLimited: false, elements: out };
     }
-    return { rateLimited: false, elements: out };
+    await sleep(2000); // one request per 2 seconds
   }
-  return { rateLimited: false, elements: [] };
+  return { rateLimited, elements: out };
 }
 
 async function main() {

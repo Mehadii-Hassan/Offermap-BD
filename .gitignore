@@ -35,4 +35,5 @@ blob-report/
 
 # runtime outlet-brand cache
 .outlet-brands.json
+.outlet-pages.json
 
