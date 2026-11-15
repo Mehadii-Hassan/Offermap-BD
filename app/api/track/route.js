@@ -36,9 +36,10 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, ignored: "bot" });
   }
 
-  // Rate limit per IP (light): max 60 requests / minute.
+  // Rate limit per IP (light): max 240 requests / minute (kept high enough to
+  // not break multi-tab usage or automated e2e suites running from one IP).
   const ip = getClientIp(req);
-  if (!rateLimit("track:" + ip, 60, 60000)) {
+  if (!rateLimit("track:" + ip, 240, 60000)) {
     return NextResponse.json({ ok: true, ignored: "rate" });
   }
 

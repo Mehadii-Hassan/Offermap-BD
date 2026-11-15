@@ -20,7 +20,7 @@ Done already: Phase 1 foundation (migrate, activity_log, site_visits, scrape_run
 - [x] A2 SQL FUNCTIONS: migration 002 with RPC functions aggregating dashboard numbers in Bangladesh time (UTC+6); run npm run migrate.
 - [x] A3 STATS API: cookie-protected /api/admin/stats returning all dashboard data.
 - [x] A4 DASHBOARD UI: /admin opens on a "Dashboard" tab (keep Pending/Approved/Rejected/Scraped), mobile friendly. OFFERS: added today/yesterday/7 days (user vs scraped), deleted today/yesterday/7 days (auto-expired vs admin-deleted), live now, pending, expiring in 3 days, real image vs placeholder, precision breakdown, top categories and divisions. VISITORS: unique today/yesterday/7/30 days, page views, new vs returning, top 10 pages (offer titles), top referrers, devices, top cities, 14-day charts (visitors, offers added vs deleted). ACTIVITY: latest 20 events, last 10 scrape_runs with a red flag if a run failed or inserted 0. Buttons "Delete expired now" and "Refresh".
-- [ ] A5 e2e ADMIN TEST: /api/track stores a visit; admin login (ADMIN_PASSWORD from .env.local, never print it) and the dashboard shows numbers.
+- [x] A5 e2e ADMIN TEST: /api/track stores a visit; admin login (ADMIN_PASSWORD from .env.local, never print it) and the dashboard shows numbers.
 
 ## FINAL
 - [ ] F1 FINAL CHECK: build + e2e pass; DRY_RUN=true MAX_QUERIES_PER_RUN=3 npm run scrape works and writes nothing; .env.local not tracked; final report in max 10 lines (offers live scraped/user/samples, real image vs placeholder, precision counts, anything manual).
