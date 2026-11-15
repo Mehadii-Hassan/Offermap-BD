@@ -79,26 +79,14 @@ export default function HomeClient() {
     };
   }, []);
 
-  // Effective radius: default 25 km, auto-widen to 50/100/200 when fewer than
-  // 10 offers fall inside the current radius (nationwide offers excluded).
+  // Effective radius: default 25 km. NEVER auto-widen beyond 25 (the user
+  // picks a wider radius or "Any" explicitly via "Show more"/"Any").
   const radiusInfo = useMemo(() => {
     if (userCoords == null) return { radius: null, note: null };
     const base = filters.radius === "Any" ? null : Number(filters.radius);
     let radius = base != null ? base : 25;
-    const local = allOffers.filter((o) => !o.nationwide);
-    const countIn = (r) =>
-      local.filter(
-        (o) => (distanceToOffer(o, userCoords.lat, userCoords.lng) ?? Infinity) <= r
-      ).length;
-    if (countIn(radius) < 10) {
-      for (const r of [50, 100, 200]) {
-        if (countIn(r) >= 10 || r === 200) {
-          radius = r;
-          break;
-        }
-      }
-    }
-    const note = base != null && radius !== base ? radius : base == null ? radius : null;
+    if (radius > 200) radius = 200;
+    const note = base != null ? null : radius;
     return { radius, note };
   }, [userCoords, allOffers, filters.radius]);
 
@@ -593,6 +581,20 @@ const nearOffers = useMemo(() => {
                     <p className="mb-4 text-sm font-semibold text-amber-300">
                       {t.showingWithin} {radiusInfo.radius} {t.kmAway}
                     </p>
+                  )}
+                  {radiusInfo.radius === 25 && visibleList.filter((o) => !o.nationwide).length < 12 && (
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-white/50">{t.notEnoughNearby}</span>
+                      {[50, 100].map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => setFilters((f) => ({ ...f, radius: String(r) }))}
+                          className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/80 hover:bg-white/10 transition"
+                        >
+                          {t.showMoreWithin} {r} {t.kmAway}
+                        </button>
+                      ))}
+                    </div>
                   )}
                   {loading ? (
                     <GridSkeleton />

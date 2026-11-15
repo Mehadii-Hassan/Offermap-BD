@@ -13,6 +13,7 @@
     "migrate": "node scripts/migrate.js",
     "fix": "node scripts/fix-categories.js",
     "backfill-precision": "node scripts/backfill-precision.js",
+    "backfill-areas": "node scripts/backfill-areas.js",
     "cleanup": "node scripts/cleanup-expired.js",
     "test:e2e": "npm run build && playwright test",
     "scrape": "node scripts/scrape.js",
