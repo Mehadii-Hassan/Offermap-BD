@@ -41,6 +41,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     try {
       localStorage.setItem("om-lang", lang);
+      document.documentElement.lang = lang === "bn" ? "bn" : "en";
     } catch (e) {
       /* ignore */
     }

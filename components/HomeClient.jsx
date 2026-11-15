@@ -57,6 +57,8 @@ export default function HomeClient() {
   const [activePlaceId, setActivePlaceIdState] = useState("");
   const sentinelRef = useRef(null);
   const [elsewhereExpanded, setElsewhereExpanded] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const [filters, setFilters] = useState({
     category: "All",
@@ -302,6 +304,24 @@ const nearOffers = useMemo(() => {
     document.getElementById("near-you")?.scrollIntoView({ behavior: "smooth" });
   }
 
+  function handleShare(kind) {
+    if (userCoords == null) return;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const link = `${origin}/?lat=${userCoords.lat}&lng=${userCoords.lng}&place=${encodeURIComponent(locName || "")}`;
+    const en = t.shareLocationMsg.replace("{place}", locName || t.nearYouDerived);
+    const bn = t.shareLocationMsgBn.replace("{place}", locName || t.nearYouDerived);
+    const msg = `${en}\n${bn}\n${link}`;
+    if (kind === "wa") window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+    else if (kind === "msg") window.open(`https://www.messenger.com/share/sharer.php?quote=${encodeURIComponent(msg)}`, "_blank");
+    else if (kind === "copy") {
+      navigator.clipboard?.writeText(link).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+    setShowShare(false);
+  }
+
   // Manual Division -> District selection (used when GPS is denied/absent).
   function applyManualLocation() {
     const info = districtInfo(manualDist || manualDiv);
@@ -503,12 +523,37 @@ const nearOffers = useMemo(() => {
             <span>
               {userCoords != null ? `${t.yourLocation}: ${locName || t.nearYouDerived}` : `${t.setYourLocation}`}
             </span>
-            <button
-              onClick={() => setShowLocPicker(true)}
-              className="ml-auto rounded-lg border border-white/15 px-2.5 py-1 text-xs font-semibold text-white/70 hover:bg-white/10 transition"
-            >
-              {t.change}
-            </button>
+            <div className="relative ml-auto flex flex-wrap items-center gap-2">
+              {userCoords != null && (
+                <>
+                  <button
+                    onClick={() => setShowShare((v) => !v)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-xs font-semibold text-white/70 hover:bg-white/10 transition"
+                  >
+                    <Share2 size={12} /> {copied ? t.shareCopied : t.shareLocation}
+                  </button>
+                  {showShare && (
+                    <div className="absolute right-0 top-8 z-30 flex min-w-[150px] flex-col gap-1 rounded-xl border border-white/10 bg-white/10 p-1.5 backdrop-blur-md">
+                      <button onClick={() => handleShare("wa")} className="rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-white/80 hover:bg-white/10">
+                        WhatsApp
+                      </button>
+                      <button onClick={() => handleShare("msg")} className="rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-white/80 hover:bg-white/10">
+                        Messenger
+                      </button>
+                      <button onClick={() => handleShare("copy")} className="rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-white/80 hover:bg-white/10">
+                        {t.shareCopied}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+              <button
+                onClick={() => setShowLocPicker(true)}
+                className="rounded-lg border border-white/15 px-2.5 py-1 text-xs font-semibold text-white/70 hover:bg-white/10 transition"
+              >
+                {t.change}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
