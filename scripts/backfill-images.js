@@ -106,12 +106,15 @@ async function validateImage(u) {
 }
 
 async function main() {
-  console.log("🖼️ Backfilling images for offers without one...");
+  console.log("🖼️ Backfilling images for offers (reprocessing low-quality/missing)...");
 
+  // Select ALL offers with a source page, then reprocess those that don't yet
+  // point to a stored webp (image missing or still a raw external URL). Once an
+  // offer is stored, its image becomes our bucket URL, so it is skipped on the
+  // next run — that keeps the script resumable.
   const { data: rows, error } = await supabase
     .from("offers")
     .select("id, title, source_url, image")
-    .is("image", null)
     .not("source_url", "is", null)
     .limit(MAX);
   if (error) {
@@ -119,8 +122,10 @@ async function main() {
     process.exit(1);
   }
 
-  const candidates = rows || [];
-  console.log(`Found ${candidates.length} offers to backfill (max ${MAX}).`);
+  const candidates = (rows || []).filter(
+    (r) => !r.image || !/offer-images/i.test(r.image)
+  );
+  console.log(`Found ${(rows || []).length} offers with source_url; ${candidates.length} need backfill (max ${MAX}).`);
   if (candidates.length === 0) {
     console.log("✅ Nothing to do.");
     return;

@@ -11,8 +11,8 @@ Done already: Phase 1 foundation (migrate, activity_log, site_visits, scrape_run
 ## IMAGES
 - [x] I1 IMAGE PIPELINE (lib/image-pipeline.js, used by scraper and backfill): candidates in order: og:image/twitter:image of the source page, the largest content <img> (check up to 8), optional Unsplash category photo if UNSPLASH_ACCESS_KEY exists (with credit), else none. Rules: https, status 200, content-type image/*, max 5 MB, use "probe-image-size" to require width>=800 and height>=450 (og:image>=600 wide), aspect ratio 1:1 to 2.4:1; reject URLs containing logo, icon, favicon, avatar, sprite, placeholder; reject square images under 800px.
 - [x] I2 STORAGE: save accepted images as webp (max 1200px wide, "sharp", quality ~80) in public Supabase bucket "offer-images" at offers/<id>.webp; offers.image = public URL, source_image_url = original; delete stored image when an offer is deleted (cleanup script and admin delete); show "Image: <source domain>" on detail page.
-- [ ] I3 CARD UI: all cards one fixed 16:10 ratio, object-cover, gradient while loading, bottom gradient for readable text, rounded-2xl; odd ratios use object-contain over a blurred copy; missing/broken image falls back to the category placeholder (gradient + icon); no layout shift; detail page large hero.
-- [ ] I4 BACKFILL: scripts/backfill-images.js reprocesses ALL existing offers with these rules (max 100 per run, 1 request/s, resumable, replaces low-quality images). Run it repeatedly until all are processed.
+- [x] I3 CARD UI: all cards one fixed 16:10 ratio, object-cover, gradient while loading, bottom gradient for readable text, rounded-2xl; odd ratios use object-contain over a blurred copy; missing/broken image falls back to the category placeholder (gradient + icon); no layout shift; detail page large hero.
+- [x] I4 BACKFILL: scripts/backfill-images.js reprocesses ALL existing offers with these rules (max 100 per run, 1 request/s, resumable, replaces low-quality images). Run it repeatedly until all are processed.
 - [ ] I5 e2e IMAGE TESTS: no broken <img> (naturalWidth>0) on home and 3 detail pages; no horizontal overflow or layout shift at 390px width.
 
 ## ADMIN
