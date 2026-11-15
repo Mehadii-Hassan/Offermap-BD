@@ -13,7 +13,7 @@ Done already: Phase 1 foundation (migrate, activity_log, site_visits, scrape_run
 - [x] I2 STORAGE: save accepted images as webp (max 1200px wide, "sharp", quality ~80) in public Supabase bucket "offer-images" at offers/<id>.webp; offers.image = public URL, source_image_url = original; delete stored image when an offer is deleted (cleanup script and admin delete); show "Image: <source domain>" on detail page.
 - [x] I3 CARD UI: all cards one fixed 16:10 ratio, object-cover, gradient while loading, bottom gradient for readable text, rounded-2xl; odd ratios use object-contain over a blurred copy; missing/broken image falls back to the category placeholder (gradient + icon); no layout shift; detail page large hero.
 - [x] I4 BACKFILL: scripts/backfill-images.js reprocesses ALL existing offers with these rules (max 100 per run, 1 request/s, resumable, replaces low-quality images). Run it repeatedly until all are processed.
-- [ ] I5 e2e IMAGE TESTS: no broken <img> (naturalWidth>0) on home and 3 detail pages; no horizontal overflow or layout shift at 390px width.
+- [x] I5 e2e IMAGE TESTS: no broken <img> (naturalWidth>0) on home and 3 detail pages; no horizontal overflow or layout shift at 390px width.
 
 ## ADMIN
 - [ ] A1 VISIT TRACKING: <VisitTracker /> in root layout sends {path, referrer} to /api/track (sendBeacon/fetch); visitor_id = random UUID in localStorage; server route (service role key) sets is_new_visitor, reads Vercel headers x-vercel-ip-country/-country-region/-city, user-agent -> device, ignores bots, /admin and /api, light rate limit; add one honest line about anonymous visit statistics to the Privacy page.

@@ -37,6 +37,18 @@ export default function OfferImage({
     setOdd(false);
   }, [offer.image]);
 
+  const showImage = Boolean(offer.image) && !failed;
+
+  // If an image never finishes loading (server hangs) fall back to the
+  // placeholder so a broken image never lingers.
+  useEffect(() => {
+    if (!showImage || loaded) return;
+    const t = setTimeout(() => {
+      if (imgRef.current && !imgRef.current.complete) setFailed(true);
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [showImage, loaded]);
+
   function handleLoad() {
     const el = imgRef.current;
     if (el && el.naturalWidth) {
@@ -46,7 +58,6 @@ export default function OfferImage({
     setLoaded(true);
   }
 
-  const showImage = offer.image && !failed;
   const hover = hoverScale ? " transition-transform duration-500 group-hover:scale-105" : "";
 
   if (!showImage) {
