@@ -23,4 +23,4 @@ Done already: Phase 1 foundation (migrate, activity_log, site_visits, scrape_run
 - [x] A5 e2e ADMIN TEST: /api/track stores a visit; admin login (ADMIN_PASSWORD from .env.local, never print it) and the dashboard shows numbers.
 
 ## FINAL
-- [ ] F1 FINAL CHECK: build + e2e pass; DRY_RUN=true MAX_QUERIES_PER_RUN=3 npm run scrape works and writes nothing; .env.local not tracked; final report in max 10 lines (offers live scraped/user/samples, real image vs placeholder, precision counts, anything manual).
+- [x] F1 FINAL CHECK: build + e2e pass; DRY_RUN=true MAX_QUERIES_PER_RUN=3 npm run scrape works and writes nothing; .env.local not tracked; final report in max 10 lines (offers live scraped/user/samples, real image vs placeholder, precision counts, anything manual).
