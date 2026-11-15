@@ -18,6 +18,7 @@ import { dirname, join } from "path";
 import { createClient } from "@supabase/supabase-js";
 import { isInsideBangladesh, districtInfo } from "../lib/bd-locations.js";
 import { storeImage } from "../lib/image-store.js";
+import { insertOutletsForOffer } from "./outlet-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -357,6 +358,7 @@ Extract at most 3 unique deals from these results. For each deal return a JSON o
 - outdated: true ONLY if the offer is clearly about a PAST event/season (e.g. last Ramadan or Eid now that the season is over, a last-year campaign, or a title/date mentioning an old year). Today's date is ${todayDateStr()}. Otherwise false.
 - nationwide: true ONLY if the offer is valid across ALL of Bangladesh (e.g. Daraz, bKash, Nagad, a bank, or a brand with many outlets). Otherwise false.
 - bangladesh_offer: true ONLY if the offer is clearly for customers in Bangladesh — a Bangladeshi shop/brand/outlet, a Bangladeshi bank or wallet (bKash/Nagad/Rocket/City/DBBL...), a Bangladeshi website, or prices in BDT/৳/Tk. FALSE for foreign sites and global booking/travel/software/course platforms (e.g. Expedia, Hotwire, Coursera, Scrimba) or anything priced in $, £, € only or with US/UK-only terms.
+- outlets: an array of site/branch addresses if this page lists the brand's outlets, partner merchants or "our outlets"/branch locations (e.g. a bank card partner list, a wallet/telecom merchant list, a restaurant chain's branch addresses). Put each listed branch/partner address as one string. If the page does NOT list addresses, leave [].
 - imageUrl: the best product/offer image url if available, else empty string
 - sourceUrl: the source url
 
@@ -390,6 +392,7 @@ JSON response format:
     "outdated": false,
     "nationwide": false,
     "bangladesh_offer": true,
+    "outlets": [],
     "imageUrl": "...",
     "sourceUrl": "..."
   }
@@ -524,6 +527,7 @@ Extract ALL unique offers/deals you can find on this listing page. Return a JSON
 - outdated: true ONLY if about a PAST season/year (last Ramadan/Eid, "last year", old year); else false
 - nationwide: true ONLY if valid across all Bangladesh (bank/wallet/telecom/Daraz-type/large chain with many outlets); else false
 - bangladesh_offer: true ONLY if clearly for Bangladesh customers (BD shop/brand/bank/wallet, BDT/৳/Tk) — false for foreign/global sites priced in $/£/€; else false
+- outlets: an array of site/branch addresses if this page lists the brand's outlets, partner merchants or "our outlets"/branch locations (bank card/wallet/telecom partner lists, a chain's branches). Each listed branch/partner address is one string. If the page lists no addresses, return [].
 - imageUrl: best https image if available, else empty string
 
 Return ONLY a valid JSON array (no markdown). If nothing usable, return [].`;
@@ -1050,6 +1054,20 @@ async function upsertOffers(offersToInsert, skipUrlCheck = false) {
       }
     } catch (e) {
       /* non-fatal */
+    }
+    // Branch/partner addresses become offer_outlets (BATCH H3).
+    if (data?.id && Array.isArray(o.outlets) && o.outlets.length) {
+      try {
+        const { saved: savedOutlets } = await insertOutletsForOffer(supabase, data.id, o.outlets);
+        if (savedOutlets) {
+          await supabase
+            .from("offers")
+            .update({ location_precision: "exact" })
+            .eq("id", data.id);
+        }
+      } catch (e) {
+        /* non-fatal */
+      }
     }
     if (o.addressApproximate) districtCenter += 1;
     else exact += 1;

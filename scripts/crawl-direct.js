@@ -13,6 +13,7 @@ import { dirname, join } from "path";
 import { tmpdir } from "os";
 import { createClient } from "@supabase/supabase-js";
 import { isInsideBangladesh, districtInfo } from "../lib/bd-locations.js";
+import { insertOutletsForOffer } from "./outlet-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -142,10 +143,19 @@ function chunkText(text, maxLen = 150000) {
   return out;
 }
 
+// BATCH H3 small caps for the LIVE direct crawl: at most MAX_GEMINI_CALLS.
+const MAX_GEMINI_CALLS = Number(process.env.MAX_GEMINI_CALLS || 40);
+let geminiCalls = 0;
+
 async function extractOffers(pageUrl, html) {
   if (!html) return [];
   const all = [];
   for (const chunk of chunkText(html)) {
+    if (geminiCalls >= MAX_GEMINI_CALLS) {
+      console.warn(`⚠️ Reached MAX_GEMINI_CALLS (${MAX_GEMINI_CALLS}) — stopping extraction this run.`);
+      break;
+    }
+    geminiCalls += 1;
     const prompt = `You are an offer intelligence agent for OfferMap BD (deals in Bangladesh). Today is ${todayDateStr()}.
 Source page URL: ${pageUrl}
 Listing page content:
@@ -160,6 +170,7 @@ Extract ALL unique offers/deals. Return a JSON array. For each offer ONLY these 
 - outdated: true ONLY if about a PAST season/year; else false
 - nationwide: true ONLY if valid across all Bangladesh (bank/wallet/telecom/Daraz-type/large chain); else false
 - bangladesh_offer: true ONLY if clearly for Bangladesh customers (BD shop/bank/wallet, BDT/৳/Tk) — false for foreign/global sites priced in $/£/€; else false
+- outlets: an array of site/branch addresses if this page lists the brand's outlets, partner merchants or "our outlets"/branch locations (bank card/wallet/telecom partner lists, a chain's branches). Each listed branch/partner address is one string. If the page lists no addresses, return [].
 - imageUrl: best https image if available, else empty string
 Return ONLY a valid JSON array (no markdown). If nothing usable, return [].`;
     const res = await fetch(
@@ -320,6 +331,15 @@ async function main() {
       if (DRY_RUN) { totalInserted += 1; continue; }
       const { data, error } = await supabase.from("offers").upsert(row, { onConflict: "dedupe_key" }).select("id").single();
       if (error) { console.warn(`   ⚠️ upsert failed: ${error.message}`); totalSkipped += 1; continue; }
+      // Branch/partner addresses become offer_outlets (BATCH H3).
+      if (data?.id && Array.isArray(o.outlets) && o.outlets.length) {
+        try {
+          const { saved: savedOutlets } = await insertOutletsForOffer(supabase, data.id, o.outlets);
+          if (savedOutlets) {
+            await supabase.from("offers").update({ location_precision: "exact" }).eq("id", data.id);
+          }
+        } catch (e) { /* non-fatal */ }
+      }
       totalInserted += 1;
     }
   }
