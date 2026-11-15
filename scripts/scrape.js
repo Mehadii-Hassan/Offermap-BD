@@ -17,6 +17,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { createClient } from "@supabase/supabase-js";
 import { isInsideBangladesh, districtInfo } from "../lib/bd-locations.js";
+import { storeImage } from "../lib/image-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -1015,6 +1016,16 @@ async function upsertOffers(offersToInsert, skipUrlCheck = false) {
       throw new Error(`Upsert failed: ${error.message}`);
     }
     if (!skipUrlCheck) await logProcessedUrl(o.sourceUrl);
+    // Convert the source image to webp and store it (best effort, never fatal).
+    if (data?.id && o.imageUrl) {
+      const stored = await storeImage(data.id, o.imageUrl);
+      if (stored.saved) {
+        await supabase
+          .from("offers")
+          .update({ image: stored.publicUrl, source_image_url: o.imageUrl })
+          .eq("id", data.id);
+      }
+    }
     // Log the 'added' event for scraper-inserted offers (LIVE only).
     try {
       if (data?.id) {

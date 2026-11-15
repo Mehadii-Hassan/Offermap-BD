@@ -11,6 +11,7 @@ import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { createClient } from "@supabase/supabase-js";
+import { deleteStoredImage } from "../lib/image-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -44,25 +45,12 @@ const supabase = createClient(url, serviceKey, {
 // Bangladesh today (UTC+6) as YYYY-MM-DD.
 const bdToday = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+// Log the deletion of an offer into activity_log.
 async function logEvent(event, offerId, detail) {
   try {
     await supabase.from("activity_log").insert({ event, offer_id: offerId, detail });
   } catch (e) {
     /* non-fatal */
-  }
-}
-
-// Delete a stored image path from the offer-images bucket if it looks internal.
-async function deleteStoredImage(urlStr) {
-  try {
-    if (!urlStr) return;
-    const u = new URL(urlStr);
-    if (!u.hostname.includes(".supabase")) return;
-    const seg = urlStr.split("/");
-    const filename = seg[seg.length - 1];
-    await supabase.storage.from("offer-images").remove([filename]);
-  } catch {
-    /* ignore */
   }
 }
 

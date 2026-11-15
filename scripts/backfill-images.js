@@ -1,9 +1,11 @@
-// Backfill-images script: for existing offers with no image, try to find one
-// from the source page (og:image then twitter:image), validate it, and save it.
+// Backfill-images script: for existing offers with no stored image, try to find
+// one from the source page, validate it, and save it to the offer-images bucket
+// as webp (image + source_image_url).
 //
 // - Only processes offers that have a source_url and an empty image.
 // - At most 100 per run, ~1 request/second (polite).
 // - Validated images must be https, return image/*, and not be a logo/favicon.
+// - Resumable: a second run skips offers that already have an image.
 //
 // Run: node scripts/backfill-images.js
 
@@ -11,6 +13,7 @@ import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { createClient } from "@supabase/supabase-js";
+import { storeImage } from "../lib/image-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -130,15 +133,20 @@ async function main() {
     const html = await fetchHtml(row.source_url);
     const img = html ? metaImageFromHtml(html, row.source_url) : "";
     if (img && (await validateImage(img))) {
-      const { error: upErr } = await supabase
-        .from("offers")
-        .update({ image: img })
-        .eq("id", row.id);
-      if (upErr) {
-        console.error(`❌ Update failed for ${row.id}:`, upErr.message);
+      const stored = await storeImage(row.id, img);
+      if (stored.saved) {
+        const { error: upErr } = await supabase
+          .from("offers")
+          .update({ image: stored.publicUrl, source_image_url: img })
+          .eq("id", row.id);
+        if (upErr) {
+          console.error(`❌ Update failed for ${row.id}:`, upErr.message);
+        } else {
+          updated += 1;
+          console.log(`   - ${row.title.slice(0, 40)}: ${stored.publicUrl}`);
+        }
       } else {
-        updated += 1;
-        console.log(`   - ${row.title.slice(0, 40)}: ${img}`);
+        console.log(`   - (store failed) ${row.title.slice(0, 40)}: ${img}`);
       }
     } else {
       console.log(`   - (no image) ${row.title.slice(0, 40)}`);

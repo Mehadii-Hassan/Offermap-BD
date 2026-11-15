@@ -188,16 +188,16 @@ export default function OfferDetailClient({ offer }) {
 
         {/* Body */}
         <div className="p-5 sm:p-7">
-          {offer.source === "scraper" && offer.image && offer.sourceUrl && (
+          {(offer.source === "scraper" || offer.sourceImageUrl) && offer.image && (
             <div className="mb-4 text-right text-[11px] text-white/40">
               {t.imageCredit}{" "}
               <a
-                href={offer.sourceUrl}
+                href={offer.sourceUrl || offer.sourceImageUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline hover:text-white/70"
               >
-                {offer.sourceUrl.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0]}
+                {(offer.sourceImageUrl || offer.sourceUrl || "").replace(/^https?:\/\/(www\.)?/i, "").split("/")[0]}
               </a>
             </div>
           )}

@@ -2,9 +2,10 @@
 // All actions require the admin cookie.
 
 import { NextResponse } from "next/server";
-import { hasAdminEnv, adminUpdateOffer, adminDeleteOffer, adminGetAllOffers } from "@/lib/supabaseAdmin";
+import { hasAdminEnv, adminUpdateOffer, adminDeleteOffer, adminGetOfferById } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { logEvent } from "@/lib/activity";
+import { deleteStoredImage } from "@/lib/image-store";
 
 export async function PATCH(req, { params }) {
   if (!requireAdmin()) {
@@ -72,7 +73,9 @@ export async function DELETE(req, { params }) {
     return NextResponse.json({ error: "Not configured" }, { status: 500 });
   }
   try {
+    const offer = await adminGetOfferById(params.id);
     await adminDeleteOffer(params.id);
+    if (offer) await deleteStoredImage(offer.image);
     await logEvent({ event: "admin_deleted", offerId: params.id, source: "admin" });
   } catch (e) {
     return NextResponse.json(
