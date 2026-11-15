@@ -988,6 +988,7 @@ async function upsertOffers(offersToInsert, skipUrlCheck = false) {
       is_ongoing: o.isOngoing === true,
       is_featured: false,
       nationwide: o.nationwide === true,
+      location_precision: o.addressApproximate ? "district" : o.address ? "exact" : "area",
       hot_score: Math.floor(Math.random() * 50) + 40,
       status: "approved",
       source: o.source || "scraper",
