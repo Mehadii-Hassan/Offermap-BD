@@ -62,6 +62,18 @@ check('pushed', () => {
   return { ok: false, reason: 'HEAD != origin/main' };
 });
 
+check('deploy', () => {
+  const r = run('node', ['scripts/deploy-check.js']);
+  const lines = r.out.trim().split(/\r?\n/).filter(Boolean);
+  const last = lines.length ? lines[lines.length - 1] : '';
+  if (r.ok) {
+    const env = last.replace(/^SUCCESS\s*/i, '').trim();
+    return { ok: true, reason: env };
+  }
+  const reason = last.replace(/^FAIL deploy\s*-\s*/i, '').trim();
+  return { ok: false, reason: reason || 'deploy check failed' };
+});
+
 check('j1-header', () => {
   const p = path.join(root, 'next.config.js');
   const s = fs.readFileSync(p, 'utf8');
@@ -100,6 +112,54 @@ check('j2-bangla-font', () => {
   return { ok: false, reason: 'app/layout.* missing Hind_Siliguri' };
 });
 
+check('j2-tokens', () => {
+  const css = fs.readFileSync(path.join(root, 'app', 'globals.css'), 'utf8');
+  const rootBlock = (css.match(/:root\s*\{[\s\S]*?\}/) || [''])[0];
+  const lightBlock = (css.match(/html\.light\s*\{[\s\S]*?\}/) || [''])[0];
+  const core = ['--background', '--surface', '--surface-2', '--border', '--text', '--text-muted', '--accent', '--gradient'];
+  for (const v of core) {
+    if (!rootBlock.includes(v + ':')) return { ok: false, reason: `${v} missing in :root` };
+    if (!lightBlock.includes(v + ':')) return { ok: false, reason: `${v} missing in html.light` };
+  }
+  for (const v of ['--radius', '--shadow-sm', '--shadow-md', '--shadow-lg', '--space-1', '--space-4']) {
+    if (!rootBlock.includes(v + ':')) return { ok: false, reason: `${v} missing in :root` };
+  }
+  return { ok: true };
+});
+
+check('j2-primitives', () => {
+  const names = ['Button', 'Chip', 'Badge', 'Card', 'Sheet', 'Skeleton', 'Toast'];
+  const uiDir = path.join(root, 'components', 'ui');
+  for (const n of names) {
+    if (!fs.existsSync(path.join(uiDir, `${n}.jsx`))) {
+      return { ok: false, reason: `components/ui/${n}.jsx missing` };
+    }
+  }
+  const files = []
+    .concat(walk(path.join(root, 'components')))
+    .concat(walk(path.join(root, 'app')));
+  for (const n of names) {
+    let imported = false;
+    for (const f of files) {
+      if (!/\.(jsx?|tsx?)$/.test(f)) continue;
+      if (f === path.join(uiDir, `${n}.jsx`)) continue;
+      const s = fs.readFileSync(f, 'utf8');
+      if (s.includes(`ui/${n}`) || new RegExp(`from\\s+["']\\./${n}["']`).test(s)) {
+        imported = true;
+        break;
+      }
+    }
+    if (!imported) return { ok: false, reason: `components/ui/${n} imported nowhere` };
+  }
+  return { ok: true };
+});
+
+check('j2-no-overflow', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/j2-overflow.spec.js']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
 check('j6-screens', () => {
   const dp = path.join(root, 'docs', 'screens');
   if (!fs.existsSync(dp)) return { ok: false, reason: 'docs/screens missing' };
@@ -118,7 +178,7 @@ let pass = 0;
 for (const c of checks) {
   if (c.ok) {
     pass++;
-    console.log(`PASS ${c.name}`);
+    console.log(c.reason ? `PASS ${c.name} - ${c.reason}` : `PASS ${c.name}`);
   } else {
     console.log(`FAIL ${c.name} - ${c.reason}`);
   }

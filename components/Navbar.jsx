@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { Heart, MapPin, Sun, Moon, Plus, Home as HomeIcon, Map as MapIcon, Info } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { motion } from "framer-motion";
+import Chip from "@/components/ui/Chip";
+import Button from "@/components/ui/Button";
 
 function Logo() {
   return (
@@ -72,20 +74,21 @@ export default function Navbar() {
             >
               <Plus size={16} /> {t.addOffer}
             </Link>
-            <button
+            <Chip
               onClick={toggleLang}
-              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 transition"
               aria-label="Toggle language"
+              className="rounded-lg px-3 py-2"
             >
               {lang === "en" ? "বাংলা" : "English"}
-            </button>
-            <button
+            </Chip>
+            <Button
+              variant="ghost"
               onClick={toggleTheme}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-white/5 text-white/80 hover:bg-white/10 transition"
               aria-label="Toggle theme"
+              className="h-9 w-9 rounded-lg border border-white/15 bg-white/5 p-0 text-white/80 hover:bg-white/10"
             >
               {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

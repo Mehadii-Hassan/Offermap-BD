@@ -13,11 +13,33 @@ module.exports = {
           DEFAULT: "#0b0812",
           alt: "#141021",
         },
+        background: "var(--background)",
+        surface: {
+          DEFAULT: "var(--surface)",
+          2: "var(--surface-2)",
+        },
+        line: "var(--border)",
+        ink: {
+          DEFAULT: "var(--text)",
+          muted: "var(--text-muted)",
+        },
         accent: {
+          DEFAULT: "var(--accent)",
           orange: "#ff7a18",
           pink: "#ff3d77",
           purple: "#a855f7",
         },
+      },
+      borderRadius: {
+        card: "var(--radius)",
+      },
+      boxShadow: {
+        soft: "var(--shadow-sm)",
+        card: "var(--shadow-md)",
+        float: "var(--shadow-lg)",
+      },
+      backgroundImage: {
+        "signature-gradient": "var(--gradient)",
       },
       animation: {
         "pulse-slow": "pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",

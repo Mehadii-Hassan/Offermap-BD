@@ -1,7 +1,25 @@
 import "./globals.css";
+import { Plus_Jakarta_Sans, Hind_Siliguri } from "next/font/google";
 import { AppProvider } from "@/lib/app-context";
 import VisitTracker from "@/components/VisitTracker";
 import { APP_BASE, DEFAULT_OG_IMAGE, websiteJsonLd } from "@/lib/meta";
+
+// Self-hosted (next/font) Latin + Bangla fonts. The Latin font is first in the
+// font-family fallback; Bengali glyphs render in Hind Siliguri. When the toggle
+// is বাংলা, globals.css puts Hind Siliguri first.
+const latin = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-latin",
+  display: "swap",
+});
+
+const bangla = Hind_Siliguri({
+  subsets: ["bengali", "latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-bangla",
+  display: "swap",
+});
 
 const gsc = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
 
@@ -46,14 +64,12 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`dark ${latin.variable} ${bangla.variable}`}
+      suppressHydrationWarning
+    >
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
-          rel="stylesheet"
-        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd()) }}
