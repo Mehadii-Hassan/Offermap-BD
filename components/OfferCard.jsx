@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Heart,
@@ -26,6 +26,17 @@ export function isEndingSoon(offer) {
   return diff > 0 && diff < 4 * 86400000; // within 4 days
 }
 
+// Hydration-safe wrapper: returns false on the server and the first client
+// render, then the real value after mount (Date.now() differs between the two
+// renders, which would otherwise flip the badge and cause a mismatch).
+function useEndingSoon(offer) {
+  const [ending, setEnding] = useState(false);
+  useEffect(() => {
+    setEnding(isEndingSoon(offer));
+  }, [offer]);
+  return ending;
+}
+
 export default function OfferCard({
   offer,
   index = 0,
@@ -48,7 +59,7 @@ export default function OfferCard({
   const [saved, setSaved] = useState(
     () => typeof window !== "undefined" && getSavedIds().includes(String(offer.id))
   );
-  const ending = isEndingSoon(offer);
+  const ending = useEndingSoon(offer);
   const showingHeartPop = saved;
 
   function handleSave(e) {
