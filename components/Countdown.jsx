@@ -25,13 +25,29 @@ export function parseTimeDiff(diff) {
 
 export default function Countdown({ validTill, compact = false }) {
   const { t } = useApp();
-  const [diff, setDiff] = useState(() => timeLeft(validTill));
+  // Start as null so the server render and the first client render are
+  // identical (Date.now() differs between them, which would otherwise cause a
+  // hydration mismatch). The real value is filled in after mount.
+  const [diff, setDiff] = useState(null);
 
   useEffect(() => {
     setDiff(timeLeft(validTill));
     const id = setInterval(() => setDiff(timeLeft(validTill)), 1000);
     return () => clearInterval(id);
   }, [validTill]);
+
+  // Stable placeholder before mount (no time-specific text) to keep SSR and
+  // the initial client render in sync.
+  if (diff == null) {
+    if (compact) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold text-emerald-100 bg-emerald-500/20">
+          &nbsp;
+        </span>
+      );
+    }
+    return <span className="text-white/40">—</span>;
+  }
 
   const { days, hours, mins, secs, expired } = parseTimeDiff(diff);
 

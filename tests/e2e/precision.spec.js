@@ -1,11 +1,19 @@
 import { test, expect } from "@playwright/test";
-import { e2eFixture } from "./e2e-fixture";
+import { seedE2E, cleanupE2E } from "./helpers/seed";
 
 const BASE = "http://localhost:3100";
 
-test("Uttara Sector 10: no district-precision offer in nearby sections; only in Elsewhere", async ({ browser, e2eFixture }) => {
-  await use(e2eFixture); // Apply the fixture
+let ids;
 
+test.beforeAll(async () => {
+  ids = await seedE2E();
+});
+
+test.afterAll(async () => {
+  await cleanupE2E();
+});
+
+test("Uttara Sector 10: no district-precision offer in nearby sections; only in Elsewhere", async ({ browser }) => {
   const ctx = await browser.newContext({
     geolocation: { latitude: 23.8759, longitude: 90.3795 },
     permissions: ["geolocation"],

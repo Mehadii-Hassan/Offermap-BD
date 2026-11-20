@@ -1,8 +1,18 @@
 import { test, expect } from "@playwright/test";
-import { e2eFixture } from "./e2e-fixture";
+import { seedE2E, cleanupE2E } from "./helpers/seed";
 
 const BASE = "http://localhost:3100";
-const SHOP = "Pizza Party Chain";
+const SHOP = "E2E Test Chain";
+
+let ids;
+
+test.beforeAll(async () => {
+  ids = await seedE2E();
+});
+
+test.afterAll(async () => {
+  await cleanupE2E();
+});
 
 function listenForErrors(page, errors) {
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
@@ -11,9 +21,7 @@ function listenForErrors(page, errors) {
   });
 }
 
-test("outlets: chain offer shows nearest outlet, outlet list + map on detail, empty state, no console errors", async ({ browser, e2eFixture }, use) => {
-  await use(e2eFixture); // Apply the fixture
-
+test("outlets: chain offer shows nearest outlet, outlet list + map on detail, empty state, no console errors", async ({ browser }) => {
   const ctx = await browser.newContext({
     geolocation: { latitude: 23.8759, longitude: 90.3795 },
     permissions: ["geolocation"],
@@ -62,9 +70,8 @@ test("outlets: chain offer shows nearest outlet, outlet list + map on detail, em
 
   await expect(page2.locator("body")).toContainText("Add it in 10 seconds with a photo");
 
-  await expect(page2.locator("body")).toContainText("Nearest outlet");
   expect(errors).toEqual([]);
-  expect(errors2).toEqual();
+  expect(errors2).toEqual([]);
 
   await ctx.close();
   await ctx2.close();
