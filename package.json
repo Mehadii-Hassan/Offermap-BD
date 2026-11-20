@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "verify": "node scripts/verify.js",
     "seed": "node scripts/seed.js",
     "clean-samples": "node scripts/clean-samples.js",
     "reset-scraped": "node scripts/reset-scraped.js",
