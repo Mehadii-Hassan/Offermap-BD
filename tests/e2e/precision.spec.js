@@ -1,15 +1,17 @@
 import { test, expect } from "@playwright/test";
+import { e2eFixture } from "./e2e-fixture";
 
 const BASE = "http://localhost:3100";
 
-test("Uttara Sector 10: no district-precision offer in nearby sections; only in Elsewhere", async ({
-  browser,
-}) => {
+test("Uttara Sector 10: no district-precision offer in nearby sections; only in Elsewhere", async ({ browser, e2eFixture }) => {
+  await use(e2eFixture); // Apply the fixture
+
   const ctx = await browser.newContext({
     geolocation: { latitude: 23.8759, longitude: 90.3795 },
     permissions: ["geolocation"],
   });
   const page = await ctx.newPage();
+
   await page.goto(BASE + "/", { waitUntil: "networkidle", timeout: 60000 });
   await page.waitForTimeout(4000);
   await page.waitForSelector(".no-scrollbar button", { timeout: 30000 });
@@ -32,5 +34,6 @@ test("Uttara Sector 10: no district-precision offer in nearby sections; only in 
 
   // A collapsed "Elsewhere in" toggle exists below the nearby sections.
   await expect(page.getByText(/Elsewhere in/i).first()).toBeVisible();
+
   await ctx.close();
 });

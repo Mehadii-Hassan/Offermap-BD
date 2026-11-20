@@ -11,9 +11,10 @@
 import { readFileSync, existsSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import https from "https";
 import { createClient } from "@supabase/supabase-js";
 import { isInsideBangladesh } from "../lib/bd-locations.js";
+const TEST_FLAG = process.env.TEST_FLAG;
+if (!TEST_FLAG) { console.error("Use: node scripts/expand-outlets.js --test"); process.exit(1); }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");

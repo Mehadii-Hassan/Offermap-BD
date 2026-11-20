@@ -59,6 +59,33 @@ export default function HomeClient() {
   const [elsewhereExpanded, setElsewhereExpanded] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [inAppBrowser, setInAppBrowser] = useState(false);
+  function handleShare(kind) {
+    if (userCoords == null) return;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const link = `${origin}/?lat=${userCoords.lat}&lng=${userCoords.lng}&place=${encodeURIComponent(locName || "")}`;
+    const en = t.shareLocationMsg.replace("{place}", locName || t.nearYouDerived);
+    const bn = t.shareLocationMsgBn.replace("{place}", locName || t.nearYouDerived);
+    const msg = `${en}\n${bn}\n${link}`;
+    if (kind === "wa") window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+    else if (kind === "msg") window.open(`https://www.messenger.com/share/sharer.php?quote=${encodeURIComponent(msg)}`, "_blank");
+    else if (kind === "copy") {
+      navigator.clipboard?.writeText(link).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+    setShowShare(false);
+  }
+
+  // In-app browser detection (runs once on mount; never requests location here).
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    const ua = navigator.userAgent || "";
+    if (/FBAN|FBAV|FB_IAB|Instagram|Line|TikTok/.test(ua)) {
+      setInAppBrowser(true);
+    }
+  }, []);
 
   const [filters, setFilters] = useState({
     category: "All",
@@ -304,24 +331,6 @@ const nearOffers = useMemo(() => {
     document.getElementById("near-you")?.scrollIntoView({ behavior: "smooth" });
   }
 
-  function handleShare(kind) {
-    if (userCoords == null) return;
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const link = `${origin}/?lat=${userCoords.lat}&lng=${userCoords.lng}&place=${encodeURIComponent(locName || "")}`;
-    const en = t.shareLocationMsg.replace("{place}", locName || t.nearYouDerived);
-    const bn = t.shareLocationMsgBn.replace("{place}", locName || t.nearYouDerived);
-    const msg = `${en}\n${bn}\n${link}`;
-    if (kind === "wa") window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-    else if (kind === "msg") window.open(`https://www.messenger.com/share/sharer.php?quote=${encodeURIComponent(msg)}`, "_blank");
-    else if (kind === "copy") {
-      navigator.clipboard?.writeText(link).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
-    }
-    setShowShare(false);
-  }
-
   // Manual Division -> District selection (used when GPS is denied/absent).
   function applyManualLocation() {
     const info = districtInfo(manualDist || manualDiv);
@@ -503,6 +512,23 @@ const nearOffers = useMemo(() => {
 
   return (
     <>
+      {inAppBrowser && (
+        <div className="sticky top-0 z-40 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-center text-xs font-medium text-amber-200">
+          Location may not work here. Tap the menu (⋮) and choose{" "}
+          <span className="font-bold">Open in Chrome/Safari</span>.
+          {" "}
+          <button
+            onClick={() => {
+              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                navigator.clipboard.writeText(window.location.href).then(() => setCopied(true));
+              }
+            }}
+            className="underline underline-offset-2"
+          >
+            {copied ? "Link copied" : "Copy link"}
+          </button>
+        </div>
+      )}
       <Hero onSearch={setQuery} onNearMe={handleNearMe} />
 
       <MyPlaces

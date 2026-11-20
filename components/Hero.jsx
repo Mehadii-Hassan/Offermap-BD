@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Search, LocateFixed, MapPin, ChevronDown, Plus } from "lucide-react";
+import { Search, LocateFixed, MapPin, ChevronDown, Plus, LocateOff } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { DIVISIONS } from "@/lib/offers";
 
@@ -12,6 +12,7 @@ export default function Hero({ onSearch, onNearMe }) {
   const [query, setQuery] = useState("");
   const [locating, setLocating] = useState(false);
   const [status, setStatus] = useState(null); // "success" | "denied"
+  const [statusMsg, setStatusMsg] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [pickDivision, setPickDivision] = useState("Dhaka");
   const [pickDistrict, setPickDistrict] = useState("Dhaka");
@@ -35,26 +36,67 @@ export default function Hero({ onSearch, onNearMe }) {
     onSearch(query);
   }
 
-  function handleNearMe() {
+  function askPosition(opts) {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, opts);
+    });
+  }
+
+  function showDeniedMessage() {
+    const ua = navigator.userAgent || "";
+    let steps = t.permissionDeniedSteps;
+    if (/Android/i.test(ua)) steps = t.permissionDeniedStepsAndroid;
+    else if (/iPhone|iPad|iOS/i.test(ua)) steps = t.permissionDeniedStepsIOS;
+    else if (!/Mobi/i.test(ua)) steps = t.permissionDeniedStepsDesktop;
+    setStatus("denied");
+    setStatusMsg(`${t.permissionDenied}\n${steps.map((s) => "• " + s).join("\n")}`);
+  }
+
+  async function handleNearMe() {
     setLocating(true);
     setStatus(null);
-    if (!("geolocation" in navigator)) {
+    setStatusMsg("");
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
       setLocating(false);
       setStatus("denied");
+      setStatusMsg(t.positionUnavailable);
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocating(false);
-        setStatus("success");
-        onNearMe({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      },
-      () => {
-        setLocating(false);
+    // If permission is already denied, never call again — show steps + fallbacks.
+    try {
+      if ("permissions" in navigator) {
+        const perm = await navigator.permissions.query({ name: "geolocation" });
+        if (perm.state === "denied") {
+          setLocating(false);
+          showDeniedMessage();
+          return;
+        }
+      }
+    } catch (e) { /* permissions.query not supported — proceed */ }
+
+    try {
+      // 1st attempt: coarse accuracy, fast.
+      let pos;
+      try {
+        pos = await askPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+      } catch (e) {
+        // 2nd attempt: high accuracy, longer timeout.
+        pos = await askPosition({ enableHighAccuracy: true, timeout: 15000 });
+      }
+      setLocating(false);
+      setStatus("success");
+      setStatusMsg("");
+      onNearMe({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    } catch (e) {
+      setLocating(false);
+      const code = e && e.code;
+      if (code === 1) {
+        showDeniedMessage();
+      } else {
         setStatus("denied");
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
+        setStatusMsg(code === 2 ? t.positionUnavailable : t.timeout);
+      }
+    }
   }
 
   return (
@@ -136,6 +178,22 @@ export default function Hero({ onSearch, onNearMe }) {
             >
               ✓ {t.nearMeSuccess}
             </motion.p>
+          )}
+
+          {locating && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-xs font-medium text-sky-300"
+            >
+              {t.locating}
+            </motion.p>
+          )}
+
+          {status === "denied" && statusMsg && (
+            <p className="mx-auto mt-1 max-w-md whitespace-pre-line text-center text-xs text-amber-300/90">
+              {statusMsg}
+            </p>
           )}
 
           {status === "denied" && (

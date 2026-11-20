@@ -1,22 +1,19 @@
 import { test, expect } from "@playwright/test";
+import { e2eFixture } from "./e2e-fixture";
 
 const BASE = "http://localhost:3100";
 const SHOP = "Pizza Party Chain";
 
-// Collect browser console/page errors (filters benign favicon 404s).
 function listenForErrors(page, errors) {
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
-    if (m.type() === "error") {
-      const t = m.text();
-      // Ignore missing favicon/network noise that is unrelated to our code.
-      if (!/favicon|net::|ERR_/i.test(t)) errors.push(t);
-    }
+    if (m.type() === "error") errors.push(m.text());
   });
 }
 
-test("outlets: chain offer shows nearest outlet, outlet list + map on detail, empty state, no console errors", async ({ browser }) => {
-  // --- Home at Uttara: chain offer appears with nearest-outlet label ---
+test("outlets: chain offer shows nearest outlet, outlet list + map on detail, empty state, no console errors", async ({ browser, e2eFixture }, use) => {
+  await use(e2eFixture); // Apply the fixture
+
   const ctx = await browser.newContext({
     geolocation: { latitude: 23.8759, longitude: 90.3795 },
     permissions: ["geolocation"],
@@ -62,11 +59,13 @@ test("outlets: chain offer shows nearest outlet, outlet list + map on detail, em
   await page2.goto(BASE, { waitUntil: "networkidle", timeout: 60000 });
   await page2.waitForTimeout(4000);
   await page2.waitForSelector(".no-scrollbar button", { timeout: 30000 });
+
   await expect(page2.locator("body")).toContainText("Add it in 10 seconds with a photo");
 
-  await expect(page.locator("body")).toContainText("Nearest outlet");
+  await expect(page2.locator("body")).toContainText("Nearest outlet");
   expect(errors).toEqual([]);
-  expect(errors2).toEqual([]);
+  expect(errors2).toEqual();
+
   await ctx.close();
   await ctx2.close();
 });
