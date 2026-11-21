@@ -20,6 +20,7 @@ import {
   discountValue,
 } from "@/lib/offers";
 import { getGeo, setGeo } from "@/lib/geo";
+import { offersMatchFilters as matchesOfferFilters } from "@/lib/filters";
 import { DIVISIONS, districtNames, districtInfo } from "@/lib/bd-locations";
 import { getPrecision } from "@/lib/precision";
 import { loadPlaces, addPlace, renamePlace, removePlace, getActivePlaceId, setActivePlaceId } from "@/lib/places";
@@ -243,13 +244,13 @@ const categoryCounts = useMemo(() => {
   return m;
 }, [allOffers, userCoords, radiusInfo.radius]);
 
-const offerMatchesFilters = (o) => {
-    if (activeCategory !== "All" && o.category !== activeCategory) return false;
-    if (filters.division !== "All" && o.nationwide !== true && o.division !== filters.division) return false;
-    if (filters.district !== "All" && o.nationwide !== true && o.district !== filters.district) return false;
-    if (filters.payment !== "Any" && o.paymentMethod !== filters.payment) return false;
-    return true;
-  };
+const offerMatchesFilters = (o) =>
+  matchesOfferFilters(o, {
+    category: activeCategory,
+    division: filters.division,
+    district: filters.district,
+    payment: filters.payment,
+  });
 
   // Distinct offers (district-precision, not nationwide) shown in a collapsed
   // "Elsewhere in <district>" section below the nearby sections: their pin is
@@ -700,6 +701,7 @@ const ending = useMemo(
         {!searchRes && (
           <FilterBar
             filters={filters}
+            offers={allOffers}
             onChange={(f) => {
               setFilters(f);
               if (f.category !== activeCategory) {

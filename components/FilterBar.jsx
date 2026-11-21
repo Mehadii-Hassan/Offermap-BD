@@ -3,15 +3,26 @@
 import { useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 import { useApp } from "@/lib/app-context";
+import { countOffers } from "@/lib/filters";
 import { CATEGORIES, PAYMENT_METHODS, DIVISIONS } from "@/lib/offers";
 
 const RADII = ["5", "10", "25", "50", "100"];
 
-export default function FilterBar({ filters, onChange }) {
+export default function FilterBar({ filters, onChange, offers = [] }) {
   const { t } = useApp();
   const [open, setOpen] = useState(false);
 
   const set = (key, val) => onChange({ ...filters, [key]: val });
+
+  // Live count of offers matching the current filter selections (BATCH K6).
+  const applyCount = offers
+    ? countOffers(offers, {
+        category: filters.category,
+        division: filters.division,
+        district: filters.district,
+        payment: filters.payment,
+      })
+    : 0;
 
   const selectCls =
     "w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-accent-purple";
@@ -33,14 +44,22 @@ export default function FilterBar({ filters, onChange }) {
   return (
     <div className="mb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/10 transition"
-        >
-          <SlidersHorizontal size={16} />
-          {t.filter}
-          {open && <X size={14} />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/10 transition"
+          >
+            <SlidersHorizontal size={16} />
+            {t.filter}
+            {open && <X size={14} />}
+          </button>
+          <button
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-tr from-accent-orange to-accent-pink px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-accent-pink/30 hover:opacity-90 transition"
+          >
+            {t.applyFilters} ({applyCount})
+          </button>
+        </div>
 
         <p className="text-xs text-white/40">{t.results}</p>
       </div>
