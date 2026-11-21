@@ -24,13 +24,23 @@ test("K1: no geolocation call happens on load without permission", async ({ brow
 test("K1: denied case shows the message and the fallback options", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
-  const client = await context.newCDPSession(page);
-  await client.send("Browser.setPermission", { origin: "http://localhost:3100", permission: "geolocation", setting: "denied" });
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = (succ, err, opts) => {
+      const e = new Error("Permission denied");
+      e.code = 1; // PositionError.PERMISSION_DENIED
+      e.PERMISSION_DENIED = 1;
+      e.POSITION_UNAVAILABLE = 2;
+      e.TIMEOUT = 3;
+      if (err) err(e);
+    };
+  });
   await page.goto(BASE + "/", { waitUntil: "networkidle", timeout: 60000 });
   await page.locator('button[aria-label="Change location"]').click();
-  await page.getByRole("button", { name: /Near Me/ }).click();
-  await expect(page.getByText(/Location denied/)).toBeVisible();
-  await expect(page.getByText(/Approximate, based on your network/)).toBeVisible();
+  const useCurrent = page.getByRole("dialog").getByRole("button", { name: "Use current" });
+  await expect(useCurrent).toBeVisible();
+  await useCurrent.click();
+  await expect(page.getByText(/Location access is turned off/).first()).toBeVisible();
+  await expect(page.getByText(/Approximate, based on your network/).first()).toBeVisible();
 });
 
 test("K1: timeout case shows the message and the fallback options", async ({ browser }) => {
@@ -48,7 +58,9 @@ test("K1: timeout case shows the message and the fallback options", async ({ bro
   });
   await page.goto(BASE + "/", { waitUntil: "networkidle", timeout: 60000 });
   await page.locator('button[aria-label="Change location"]').click();
-  await page.getByRole("button", { name: /Near Me/ }).click();
+  const useCurrent = page.getByRole("dialog").getByRole("button", { name: "Use current" });
+  await expect(useCurrent).toBeVisible();
+  await useCurrent.click();
   await expect(page.getByText(/Approximate, based on your network/)).toBeVisible();
 });
 

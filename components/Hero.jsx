@@ -1,35 +1,20 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Search, LocateFixed, MapPin, ChevronDown, Plus, LocateOff } from "lucide-react";
+import { Search, LocateFixed, MapPin, Plus } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { DIVISIONS } from "@/lib/offers";
+import LocationSheet from "./LocationSheet";
 
-export default function Hero({ onSearch, onNearMe, placeLabel, nearbyCount }) {
+export default function Hero({ onSearch, onNearMe, onManualLocation, placeLabel, nearbyCount }) {
   const { t } = useApp();
   const [query, setQuery] = useState("");
   const [locating, setLocating] = useState(false);
   const [status, setStatus] = useState(null); // "success" | "denied"
   const [statusMsg, setStatusMsg] = useState("");
-  const [showPicker, setShowPicker] = useState(false);
-  const [pickDivision, setPickDivision] = useState("Dhaka");
-  const [pickDistrict, setPickDistrict] = useState("Dhaka");
-  const dropdownRef = useRef(null);
-
-  const districts =
-    DIVISIONS.find((d) => d.name === pickDivision)?.districts || [];
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setShowPicker(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   function submit(e) {
     e.preventDefault();
@@ -99,6 +84,43 @@ export default function Hero({ onSearch, onNearMe, placeLabel, nearbyCount }) {
     }
   }
 
+  // K1: approximate location from the network via /api/geo (Vercel headers).
+  async function handleApproximate() {
+    setLocating(true);
+    setStatus(null);
+    setStatusMsg("");
+    try {
+      const res = await fetch("/api/geo");
+      const data = await res.json();
+      if (data && data.lat != null && data.lng != null) {
+        setLocating(false);
+        setStatus("success");
+        onNearMe({ lat: data.lat, lng: data.lng });
+      } else {
+        setLocating(false);
+        setStatus("denied");
+        setStatusMsg(t.approximateLocation);
+      }
+    } catch {
+      setLocating(false);
+      setStatus("denied");
+      setStatusMsg(t.approximateLocation);
+    }
+  }
+
+  // K1: pick a place by name (Nominatim, Bangladesh-bounded).
+  function handlePickPlace(coords) {
+    if (coords && coords.lat != null) onNearMe(coords);
+  }
+
+  // K1: Division > District picker that really applies the location.
+  function handlePickDivision(divName, distName) {
+    const div = DIVISIONS.find((d) => d.name === divName);
+    const dist = div?.districts?.find((d) => d.name === distName) || div?.districts?.[0];
+    if (!dist) return;
+    onManualLocation?.({ lat: dist.lat, lng: dist.lng, name: distName });
+  }
+
   return (
     <section className="relative overflow-hidden">
       {/* Subtle animated gradient-mesh background (CSS only, GPU-cheap). */}
@@ -166,7 +188,7 @@ export default function Hero({ onSearch, onNearMe, placeLabel, nearbyCount }) {
         >
           <button
             type="button"
-            onClick={() => setShowPicker((s) => !s)}
+            onClick={() => setSheetOpen(true)}
             aria-label={t.changeLocation}
             className="inline-flex min-h-[44px] max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur transition hover:bg-white/15 active:scale-95"
           >
@@ -238,43 +260,30 @@ export default function Hero({ onSearch, onNearMe, placeLabel, nearbyCount }) {
         )}
 
         {status === "denied" && (
-          <div className="relative mx-auto mt-2 w-full max-w-sm" ref={dropdownRef}>
-            <p className="mb-2 text-xs text-amber-300/90">{t.nearMeDenied}</p>
+          <div className="relative mx-auto mt-2 w-full max-w-sm">
+            <p className="mb-2 text-xs text-amber-300/90">{statusMsg || t.nearMeDenied}</p>
             <button
-              onClick={() => setShowPicker((s) => !s)}
+              type="button"
+              onClick={() => setSheetOpen(true)}
               className="flex w-full items-center justify-between rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/15"
             >
               <span className="inline-flex items-center gap-2">
-                <MapPin size={15} /> {t.allDivisions}
+                <MapPin size={15} /> {t.approximateLocation}
               </span>
-              <ChevronDown size={18} className={showPicker ? "rotate-180" : ""} />
             </button>
-            {showPicker && (
-              <motion.ul
-                initial={{ opacity: 0, scaleY: 0.95 }}
-                animate={{ opacity: 1, scaleY: 1 }}
-                className="absolute z-30 mt-2 max-h-56 w-full overflow-auto rounded-xl border border-white/15 bg-base py-1 shadow-2xl"
-              >
-                {DIVISIONS.map((div) => (
-                  <li key={div.name}>
-                    <button
-                      onClick={() => {
-                        setPickDivision(div.name);
-                        setShowPicker(false);
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-white/80 transition hover:bg-white/10 hover:text-white"
-                    >
-                      <MapPin size={14} className="text-accent-orange" />
-                      <span>{div.name}</span>
-                      <span className="ml-auto text-xs text-white/50">{div.bn}</span>
-                    </button>
-                  </li>
-                ))}
-              </motion.ul>
-            )}
           </div>
         )}
       </div>
+
+      <LocationSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onUseCurrent={handleNearMe}
+        onApproximate={handleApproximate}
+        onPickPlace={handlePickPlace}
+        onPickPin={() => setSheetOpen(false)}
+        onPickDivision={handlePickDivision}
+      />
     </section>
   );
 }

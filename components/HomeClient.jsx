@@ -19,7 +19,7 @@ import {
   distanceToOffer,
   discountValue,
 } from "@/lib/offers";
-import { getGeo, setGeo, wasAsked, markAsked } from "@/lib/geo";
+import { getGeo, setGeo } from "@/lib/geo";
 import { DIVISIONS, districtNames, districtInfo } from "@/lib/bd-locations";
 import { getPrecision } from "@/lib/precision";
 import { loadPlaces, addPlace, renamePlace, removePlace, getActivePlaceId, setActivePlaceId } from "@/lib/places";
@@ -341,27 +341,41 @@ const ending = useMemo(
     setSelectedMapId(null);
   }
 
-  // Ask for the user's location automatically once (per browser), and reuse
-  // a previously saved location if we have one.
+  // K1: never auto-request geolocation on load. Restore a saved location, and
+  // silently use GPS only when navigator.permissions.query says "granted".
   useEffect(() => {
     const saved = getGeo();
     if (saved && saved.lat != null) {
       setUserCoords(saved);
     }
-    if (!wasAsked() && typeof navigator !== "undefined" && "geolocation" in navigator) {
-      markAsked();
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    let cancelled = false;
+    async function silentGps() {
+      try {
+        if (!("geolocation" in navigator)) return;
+        if ("permissions" in navigator) {
+          const perm = await navigator.permissions.query({ name: "geolocation" });
+          if (perm.state !== "granted") return;
+        }
+        const pos = await new Promise((res, rej) =>
+          navigator.geolocation.getCurrentPosition(
+            (p) => res(p),
+            (e) => rej(e),
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+          )
+        );
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        if (!cancelled) {
           setUserCoords(coords);
           setGeo(coords);
-        },
-        () => {
-          // denied or error — allow manual division/district selection
-        },
-        { enableHighAccuracy: true, timeout: 8000 }
-      );
+        }
+      } catch {
+        /* permission not granted / unavailable — stay on saved or manual */
+      }
     }
+    silentGps();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function handleFirstSave() {
@@ -512,8 +526,8 @@ const ending = useMemo(
     <>
       {inAppBrowser && (
         <div className="sticky top-0 z-40 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-center text-xs font-medium text-amber-200">
-          Location may not work here. Tap the menu (⋮) and choose{" "}
-          <span className="font-bold">Open in Chrome/Safari</span>.
+          {t.inAppBanner}{" "}
+          <span className="font-bold">Open in Chrome/Safari</span>
           {" "}
           <button
             onClick={() => {
@@ -523,13 +537,23 @@ const ending = useMemo(
             }}
             className="underline underline-offset-2"
           >
-            {copied ? "Link copied" : "Copy link"}
+            {copied ? t.linkCopied : t.copyLink}
           </button>
         </div>
       )}
       <Hero
         onSearch={setQuery}
         onNearMe={handleNearMe}
+        onManualLocation={(coords) => {
+          const info = districtInfo(coords?.name);
+          if (!info) return;
+          setUserCoords({ lat: info.lat, lng: info.lng });
+          setGeo({ lat: info.lat, lng: info.lng });
+          setLocName(coords?.name || "");
+          setShowLocPicker(false);
+          setView("list");
+          setSelectedMapId(null);
+        }}
         placeLabel={locName || ""}
         nearbyCount={nearYouCount}
       />
