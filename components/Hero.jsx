@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { duration } from "@/lib/motion";
 import { Search, LocateFixed, MapPin, Plus } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { DIVISIONS } from "@/lib/offers";
@@ -131,7 +132,7 @@ export default function Hero({ onSearch, onNearMe, onManualLocation, placeLabel,
           id="hero-title"
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: duration.base }}
           className="mx-auto max-w-3xl text-balance text-[2rem] font-black leading-[1.08] tracking-tight sm:text-5xl md:text-6xl"
         >
           {t.heroTitle1}{" "}
@@ -141,7 +142,7 @@ export default function Hero({ onSearch, onNearMe, onManualLocation, placeLabel,
         <motion.p
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
+          transition={{ duration: duration.base, delay: 0.1 }}
           className="mx-auto mt-3 max-w-xl text-pretty text-sm text-white/60 sm:text-base"
         >
           {t.heroSubtitle}
@@ -152,7 +153,7 @@ export default function Hero({ onSearch, onNearMe, onManualLocation, placeLabel,
           onSubmit={submit}
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.15 }}
+          transition={{ duration: duration.base, delay: 0.15 }}
           className="mx-auto mt-7 flex max-w-xl items-center gap-2 rounded-2xl glass p-2 shadow-float"
           role="search"
         >
@@ -183,7 +184,7 @@ export default function Hero({ onSearch, onNearMe, onManualLocation, placeLabel,
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+          transition={{ duration: duration.base, delay: 0.2 }}
           className="mx-auto mt-4 flex flex-col items-center gap-3"
         >
           <button
@@ -213,7 +214,7 @@ export default function Hero({ onSearch, onNearMe, onManualLocation, placeLabel,
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.25 }}
+          transition={{ duration: duration.base, delay: 0.25 }}
           className="mt-5 flex flex-wrap items-center justify-center gap-3"
         >
           <button

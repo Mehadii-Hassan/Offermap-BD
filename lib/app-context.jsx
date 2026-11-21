@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { text } from "./text";
+import { MotionConfig } from "framer-motion";
 
 const AppContext = createContext(null);
 
@@ -67,7 +68,11 @@ export function AppProvider({ children }) {
     [theme, lang, toggleTheme, toggleLang]
   );
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <MotionConfig reducedMotion="user">
+      <AppContext.Provider value={value}>{children}</AppContext.Provider>
+    </MotionConfig>
+  );
 }
 
 export function useApp() {

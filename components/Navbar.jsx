@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Heart, MapPin, Sun, Moon, Plus, Home as HomeIcon, Map as MapIcon, Info } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { motion } from "framer-motion";
+import { spring } from "@/lib/motion";
 import Chip from "@/components/ui/Chip";
 import Button from "@/components/ui/Button";
 
@@ -71,7 +72,7 @@ export default function Navbar() {
                   <motion.span
                     layoutId="nav-pill"
                     className="absolute inset-0 rounded-lg bg-gradient-to-tr from-accent-orange/25 to-accent-purple/25"
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    transition={{ type: "spring", ...spring }}
                   />
                 )}
                 <span className="relative">{item.label}</span>

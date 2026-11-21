@@ -1,13 +1,15 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { duration, fadeUp } from "@/lib/motion";
 
 export default function SectionHeading({ emoji, title, count, action }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={fadeUp.hidden}
+      whileInView={fadeUp.visible}
       viewport={{ once: true }}
+      transition={{ duration: duration.base }}
       className="mb-4 flex items-end justify-between gap-3"
     >
       <h2 className="flex min-w-0 items-center gap-2 text-lg font-extrabold tracking-tight sm:text-2xl">
