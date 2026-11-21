@@ -87,6 +87,7 @@ export default function AddOfferClient() {
   );
   const [formDescription, setFormDescription] = useState("");
   const [formAddress, setFormAddress] = useState("");
+  const [formPhone, setFormPhone] = useState("");
 
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -303,6 +304,7 @@ export default function AddOfferClient() {
     setFormValidTill(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
     setFormDescription("");
     setFormAddress("");
+    setFormPhone("");
     setMapCenter(DEFAULT_CENTER);
     setMapZoom(12);
     setLocation(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
@@ -391,6 +393,7 @@ export default function AddOfferClient() {
       formData.set("lat", String(formLat));
       formData.set("lng", String(formLng));
       formData.set("address", formAddress.trim());
+      if (formPhone.trim()) formData.set("phone", formPhone.trim());
       if (photoFile) formData.set("image", photoFile);
 
       try {
@@ -608,6 +611,17 @@ export default function AddOfferClient() {
             onChange={(e) => setFormDescription(e.target.value)}
             placeholder="Tell us more about this offer..."
             required
+          />
+        </div>
+
+        <div>
+          <label className={labelCls}>{t.phoneLabel}</label>
+          <input
+            className={inputCls}
+            value={formPhone}
+            onChange={(e) => setFormPhone(e.target.value)}
+            placeholder="01700000000"
+            inputMode="tel"
           />
         </div>
 

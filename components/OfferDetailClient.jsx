@@ -7,6 +7,7 @@ import {
   MapPin,
   Clock,
   Navigation,
+  Phone,
   MessageCircle,
   Check,
   X,
@@ -255,45 +256,7 @@ export default function OfferDetailClient({ offer }) {
             <p className="leading-relaxed text-white/70">{offer.description}</p>
           </div>
 
-          {/* Action buttons */}
-          <div className="mb-7 grid grid-cols-1 gap-3 sm:grid-cols-4">
-            <a
-              href={directions}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-tr from-accent-orange to-accent-pink px-4 py-3 font-bold text-white shadow-lg shadow-accent-pink/30 hover:opacity-90 transition"
-            >
-              <Navigation size={16} /> {t.getDirections}
-            </a>
-            <a
-              href={wa}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 font-bold text-emerald-200 hover:bg-emerald-500/25 transition"
-            >
-              <MessageCircle size={16} /> {t.shareWhatsapp}
-            </a>
-            <a
-              href={msg}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-500/40 bg-blue-500/15 px-4 py-3 font-bold text-blue-200 hover:bg-blue-500/25 transition"
-            >
-              <Share2 size={16} /> {t.shareMessenger}
-            </a>
-            <button
-              onClick={handleReport}
-              disabled={reporting || reported}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-bold transition ${
-                reported
-                  ? "bg-emerald-500/20 text-emerald-200 cursor-default"
-                  : "border border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/25 disabled:opacity-60"
-              }`}
-            >
-              <Flag size={16} />
-              {reported ? t.reportSuccess : reporting ? "..." : t.report}
-            </button>
-          </div>
+          {/* Action buttons: moved into the sticky action bar after the card (K4) */}
 
           {/* Worked / Didn't work */}
           <div className="mb-7 rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -408,6 +371,54 @@ export default function OfferDetailClient({ offer }) {
           )}
         </div>
       </motion.article>
+
+      {/* Sticky action bar: always visible while scrolling the offer (K4) */}
+      <div className="sticky top-20 z-30 grid grid-cols-1 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+        {offer.phone && (
+          <a
+            href={`tel:${offer.phone}`}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 font-bold text-emerald-200 hover:bg-emerald-500/25 transition"
+          >
+            <Phone size={16} /> {t.call}
+          </a>
+        )}
+        <a
+          href={directions}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-tr from-accent-orange to-accent-pink px-4 py-3 font-bold text-white shadow-lg shadow-accent-pink/30 hover:opacity-90 transition"
+        >
+          <Navigation size={16} /> {t.getDirections}
+        </a>
+        <a
+          href={wa}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 font-bold text-emerald-200 hover:bg-emerald-500/25 transition"
+        >
+          <MessageCircle size={16} /> {t.shareWhatsapp}
+        </a>
+        <a
+          href={msg}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-500/40 bg-blue-500/15 px-4 py-3 font-bold text-blue-200 hover:bg-blue-500/25 transition"
+        >
+          <Share2 size={16} /> {t.shareMessenger}
+        </a>
+        <button
+          onClick={handleReport}
+          disabled={reporting || reported}
+          className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-bold transition ${
+            reported
+              ? "bg-emerald-500/20 text-emerald-200 cursor-default"
+              : "border border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/25 disabled:opacity-60"
+          }`}
+        >
+          <Flag size={16} />
+          {reported ? t.reportSuccess : reporting ? "..." : t.report}
+        </button>
+      </div>
 
       <Confetti fire={fireConfetti} />
     </main>

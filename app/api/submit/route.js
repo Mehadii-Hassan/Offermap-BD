@@ -88,6 +88,7 @@ export async function POST(req) {
   const validTill = str(form.get("valid_till"));
   const description = str(form.get("description"));
   const address = str(form.get("address"));
+  const phone = str(form.get("phone"));
   const lat = num(form.get("lat"));
   const lng = num(form.get("lng"));
 
@@ -105,6 +106,11 @@ export async function POST(req) {
       { error: "Missing or invalid fields", fields: missing },
       { status: 400 }
     );
+  }
+
+  // Optional phone: Bangladeshi mobile format only (never scraped).
+  if (phone && !/^(?:\+?88)?01[3-9]\d{8}$/.test(phone)) {
+    return NextResponse.json({ error: "Invalid phone number" }, { status: 400 });
   }
 
   if (title.length > 160 || shopName.length > 120 || description.length > 2000) {
@@ -167,6 +173,7 @@ export async function POST(req) {
     address,
     division,
     district,
+    phone: phone || null,
     image: image || null,
     isFeatured: false,
     hotScore: 0,
