@@ -48,7 +48,9 @@ check('build', () => {
 });
 
 check('e2e', () => {
-  const r = run('npx', ['playwright', 'test']);
+  // K1-K12 acceptance specs carry titles like "K1: ..." and are run individually
+  // below; this runs the full regression suite minus those.
+  const r = run('npx', ['playwright', 'test', '--grep-invert', '^K[0-9]']);
   if (r.ok) return { ok: true };
   return { ok: false, reason: last3(r.out) };
 });
@@ -116,145 +118,76 @@ const attempts = Number(process.argv[3]);
   return { ok: false, reason: out.replace(/^FAIL deploy\s*-\s*/, '') || 'deploy check failed' };
 });
 
-check('j1-header', () => {
-  const p = path.join(root, 'next.config.js');
-  const s = fs.readFileSync(p, 'utf8');
-  if (s.includes('geolocation=(self)')) return { ok: true };
-  return { ok: false, reason: 'next.config.js missing geolocation=(self)' };
-});
-
-check('j1-geo-route', () => {
-  for (const ext of ['js', 'ts']) {
-    const p = path.join(root, 'app', 'api', 'geo', `route.${ext}`);
-    if (fs.existsSync(p)) return { ok: true };
-  }
-  return { ok: false, reason: 'app/api/geo/route.js(.ts) missing' };
-});
-
-check('j1-inapp', () => {
-  for (const d of ['components', 'lib']) {
-    const dp = path.join(root, d);
-    if (!fs.existsSync(dp)) continue;
-    for (const f of walk(dp)) {
-      try {
-        if (fs.readFileSync(f, 'utf8').includes('FBAN')) return { ok: true };
-      } catch {}
-    }
-  }
-  return { ok: false, reason: 'no FBAN in components/ or lib/' };
-});
-
-check('j2-bangla-font', () => {
-  const dir = path.join(root, 'app');
-  for (const e of fs.readdirSync(dir)) {
-    if (!e.startsWith('layout.')) continue;
-    const p = path.join(dir, e);
-    if (fs.readFileSync(p, 'utf8').includes('Hind_Siliguri')) return { ok: true };
-  }
-  return { ok: false, reason: 'app/layout.* missing Hind_Siliguri' };
-});
-
-check('j2-tokens', () => {
-  const css = fs.readFileSync(path.join(root, 'app', 'globals.css'), 'utf8');
-  const rootBlock = (css.match(/:root\s*\{[\s\S]*?\}/) || [''])[0];
-  const lightBlock = (css.match(/html\.light\s*\{[\s\S]*?\}/) || [''])[0];
-  const core = ['--background', '--surface', '--surface-2', '--border', '--text', '--text-muted', '--accent', '--gradient'];
-  for (const v of core) {
-    if (!rootBlock.includes(v + ':')) return { ok: false, reason: `${v} missing in :root` };
-    if (!lightBlock.includes(v + ':')) return { ok: false, reason: `${v} missing in html.light` };
-  }
-  for (const v of ['--radius', '--shadow-sm', '--shadow-md', '--shadow-lg', '--space-1', '--space-4']) {
-    if (!rootBlock.includes(v + ':')) return { ok: false, reason: `${v} missing in :root` };
-  }
-  return { ok: true };
-});
-
-check('j2-primitives', () => {
-  const names = ['Button', 'Chip', 'Badge', 'Card', 'Sheet', 'Skeleton', 'Toast'];
-  const uiDir = path.join(root, 'components', 'ui');
-  for (const n of names) {
-    if (!fs.existsSync(path.join(uiDir, `${n}.jsx`))) {
-      return { ok: false, reason: `components/ui/${n}.jsx missing` };
-    }
-  }
-  const files = []
-    .concat(walk(path.join(root, 'components')))
-    .concat(walk(path.join(root, 'app')));
-  for (const n of names) {
-    let imported = false;
-    for (const f of files) {
-      if (!/\.(jsx?|tsx?)$/.test(f)) continue;
-      if (f === path.join(uiDir, `${n}.jsx`)) continue;
-      const s = fs.readFileSync(f, 'utf8');
-      if (s.includes(`ui/${n}`) || new RegExp(`from\\s+["']\\./${n}["']`).test(s)) {
-        imported = true;
-        break;
-      }
-    }
-    if (!imported) return { ok: false, reason: `components/ui/${n} imported nowhere` };
-  }
-  return { ok: true };
-});
-
-check('j2-no-overflow', () => {
-  const r = run('npx', ['playwright', 'test', 'tests/e2e/j2-overflow.spec.js']);
+check('k1-location', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k1-location.spec.js']);
   if (r.ok) return { ok: true };
   return { ok: false, reason: last3(r.out) };
 });
 
-check('j6-screens', () => {
-  const dp = path.join(root, 'docs', 'screens');
-  if (!fs.existsSync(dp)) return { ok: false, reason: 'docs/screens missing' };
-  const pngs = fs.readdirSync(dp).filter(f => f.toLowerCase().endsWith('.png'));
-  if (pngs.length >= 20) return { ok: true };
-  return { ok: false, reason: `only ${pngs.length} .png files` };
-});
-
-// ---- J3: home + offer card redesign ----
-
-check('j3-hero', () => {
-  const r = run('npx', ['playwright', 'test', 'tests/e2e/j3.spec.js', '-g', 'j3: hero']);
+check('k2-home', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k2-home.spec.js']);
   if (r.ok) return { ok: true };
   return { ok: false, reason: last3(r.out) };
 });
 
-check('j3-sticky-bar', () => {
-  const r = run('npx', ['playwright', 'test', 'tests/e2e/j3.spec.js', '-g', 'j3: sticky']);
+check('k3-sheet', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k3-sheet.spec.js']);
   if (r.ok) return { ok: true };
   return { ok: false, reason: last3(r.out) };
 });
 
-check('j3-cards', () => {
-  const r = run('npx', ['playwright', 'test', 'tests/e2e/j3.spec.js', '-g', 'j3: cards']);
+check('k4-detail', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k4-detail.spec.js']);
   if (r.ok) return { ok: true };
   return { ok: false, reason: last3(r.out) };
 });
 
-check('j3-no-overflow-390', () => {
-  const r = run('npx', ['playwright', 'test', 'tests/e2e/j3.spec.js', '-g', 'j3: no-overflow']);
+check('k5-map', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k5-map.spec.js']);
   if (r.ok) return { ok: true };
   return { ok: false, reason: last3(r.out) };
 });
 
-check('j3-screens', () => {
-  const dp = path.join(root, 'docs', 'screens');
-  const names = ['home-390-dark.png', 'home-390-light.png', 'home-1440-dark.png', 'home-1440-light.png'];
-  const missing = [];
-  let small = 0;
-  for (const n of names) {
-    const p = path.join(dp, n);
-    if (!fs.existsSync(p)) { missing.push(n); continue; }
-    if (fs.statSync(p).size <= 30 * 1024) small++;
-  }
-  if (missing.length) return { ok: false, reason: 'missing ' + missing.join(', ') };
-  if (small) return { ok: false, reason: `${small} screenshot(s) <= 30 KB` };
-  return { ok: true };
+check('k6-filters', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k6-filters.spec.js']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
 });
 
-check('j6-lighthouse', () => {
-  const p = path.join(root, 'docs', 'lighthouse.json');
+check('k7-nav', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k7-nav.spec.js']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
+check('k8-add', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k8-add.spec.js']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
+check('k9-static', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k9-static.spec.js']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
+check('k10-quality', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k10-quality.spec.js']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
+check('k11-screens', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/k11-screens.spec.js']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
+check('k12-outlet-areas', () => {
+  const p = path.join(root, 'scripts', 'backfill-outlet-areas.js');
   if (fs.existsSync(p)) return { ok: true };
-  return { ok: false, reason: 'docs/lighthouse.json missing' };
+  return { ok: false, reason: 'scripts/backfill-outlet-areas.js missing' };
 });
 
 let pass = 0;
