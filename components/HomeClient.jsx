@@ -293,14 +293,14 @@ const ending = useMemo(
   [allOffers, activeCategory]
 );
 
-  const todayBest = useMemo(
-    () =>
-      allOffers
-        .filter(appliesCategory)
-        .sort((a, b) => b.hotScore - a.hotScore)
-        .slice(0, 8),
-    [allOffers, activeCategory]
-  );
+  const todayBest = useMemo(() => {
+    const list = allOffers
+      .filter(appliesCategory)
+      .filter((o) => userCoords == null || (o.nationwide !== true && getPrecision(o) !== "district"));
+    return list
+      .sort((a, b) => b.isFeatured - a.isFeatured || b.hotScore - a.hotScore)
+      .slice(0, 8);
+  }, [allOffers, activeCategory, userCoords]);
 
   const nearOffers = useMemo(() => {
   if (!userCoords) return [];
@@ -746,6 +746,14 @@ const ending = useMemo(
                     emoji="🔥"
                     title={t.todaysBest}
                     count={todayBest.length}
+                    action={
+                      <button
+                        onClick={() => document.getElementById("all-deals")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                        className="text-xs font-bold text-white/60 hover:text-white"
+                      >
+                        {t.viewAll}
+                      </button>
+                    }
                   />
                   {loading ? (
                     <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4">
@@ -780,7 +788,19 @@ const ending = useMemo(
 
                 {/* Hot right now */}
                 <div className="mb-10">
-                  <SectionHeading emoji="✨" title={t.hotNow} count={hot.length} />
+                  <SectionHeading
+                    emoji="✨"
+                    title={t.hotNow}
+                    count={hot.length}
+                    action={
+                      <button
+                        onClick={() => document.getElementById("all-deals")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                        className="text-xs font-bold text-white/60 hover:text-white"
+                      >
+                        {t.viewAll}
+                      </button>
+                    }
+                  />
                   {loading ? (
                     <GridSkeleton />
                   ) : (
@@ -803,6 +823,14 @@ const ending = useMemo(
                     emoji="⏰"
                     title={t.endingSoon}
                     count={ending.length}
+                    action={
+                      <button
+                        onClick={() => document.getElementById("all-deals")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                        className="text-xs font-bold text-white/60 hover:text-white"
+                      >
+                        {t.viewAll}
+                      </button>
+                    }
                   />
                   {loading ? (
                     <GridSkeleton />
@@ -822,16 +850,29 @@ const ending = useMemo(
 
                 {/* Near you */}
                 <div id="near-you" className="mb-10 scroll-mt-28">
-                  <SectionHeading
-                    emoji="📍"
-                    title={t.nearYou}
-                    count={nearOffers.length}
-                  />
+                  <SectionHeading emoji="📍" title={t.nearYou} count={nearOffers.length} />
                   {userCoords == null ? (
                     <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-8 text-center">
-                      <p className="text-sm text-white/50">
-                        {t.nearMe} → {t.nearMeDenied}
-                      </p>
+                      <p className="text-base font-bold">{t.emptyStateTitle.replace("{place}", t.setYourLocation)}</p>
+                      <p className="mt-1 text-sm text-white/50">{t.emptyStateBody.replace("{place}", t.setYourLocation)}</p>
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                        <Link
+                          href="/add"
+                          className="inline-flex items-center gap-1 rounded-xl bg-gradient-to-tr from-accent-orange to-accent-pink px-4 py-2.5 text-sm font-bold text-white transition"
+                        >
+                          <Plus size={15} /> {t.emptyStateAdd}
+                        </Link>
+                        <button
+                          onClick={() => {
+                            if (typeof navigator !== "undefined" && navigator.clipboard) {
+                              navigator.clipboard.writeText(window.location.href).then(() => setCopied(true));
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-bold text-white/80 transition"
+                        >
+                          <Share2 size={15} /> {t.emptyStateShare}
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -950,7 +991,7 @@ const ending = useMemo(
                 )}
 
                 {/* Filtered results / all deals */}
-                <div className="mb-10">
+                <div id="all-deals" className="mb-10">
                   <SectionHeading
                     emoji="✨"
                     title={

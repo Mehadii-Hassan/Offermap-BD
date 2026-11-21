@@ -175,7 +175,7 @@ export default function Hero({ onSearch, onNearMe, onManualLocation, placeLabel,
             aria-label="Search"
           >
             <Search size={17} className="sm:hidden" />
-            <span className="hidden sm:inline">{t.open.replace(/ →$/, "")}</span>
+            <span className="hidden sm:inline">{t.search}</span>
           </button>
         </motion.form>
 

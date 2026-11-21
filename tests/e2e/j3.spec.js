@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { promises as fsPromises } from "fs";
 
 const BASE = "http://localhost:3100";
 const SHOTS = "docs/screens";
@@ -102,6 +103,8 @@ test("j3: screenshots saved for 390/1440 in dark and light", async ({ page }) =>
     }, s.light);
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(700);
-    await page.screenshot({ path: `${SHOTS}/${s.name}.png`, fullPage: true });
+    const tmp = `${SHOTS}/.tmp-${s.name}-${Date.now()}.png`;
+    await page.screenshot({ path: tmp, fullPage: true });
+    await fsPromises.copyFile(tmp, `${SHOTS}/${s.name}.png`);
   }
 });
