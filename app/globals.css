@@ -96,6 +96,30 @@ html[lang="bn"] body {
   border: 1px solid var(--card-border);
 }
 
+/* J3 sticky glass top bar: light blur at rest, denser once scrolled. */
+.glass-bar {
+  background: rgba(11, 8, 18, 0.55);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.glass-bar-solid {
+  background: rgba(11, 8, 18, 0.88);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px -24px rgba(0, 0, 0, 0.8);
+}
+html.light .glass-bar {
+  background: rgba(255, 255, 255, 0.6);
+  border-bottom-color: rgba(20, 16, 33, 0.06);
+}
+html.light .glass-bar-solid {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom-color: rgba(20, 16, 33, 0.1);
+  box-shadow: 0 12px 40px -24px rgba(20, 16, 33, 0.35);
+}
+
 /* Light theme adjustments: flip text on white text elements to dark */
 html.light .text-white {
   color: #1e1b2e;
@@ -212,5 +236,118 @@ section[id] {
 @layer components {
   .tap-highlight {
     @apply cursor-pointer select-none active:scale-95 transition;
+  }
+}
+
+/* ---------------------------------------------------------------- J3 motion */
+
+/* Hero gradient mesh: two crossed conic layers, GPU-cheap (paint once, slow
+   transform), no per-frame layout. Faded at the edges so it never competes
+   with the text. */
+.hero-mesh {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 78%);
+  -webkit-mask-image: radial-gradient(
+    120% 90% at 50% 0%,
+    #000 35%,
+    transparent 78%
+  );
+}
+.hero-mesh::before,
+.hero-mesh::after {
+  content: "";
+  position: absolute;
+  inset: -30% -15%;
+  opacity: 0.5;
+  animation: mesh-drift 26s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.hero-mesh::before {
+  background: conic-gradient(
+    from 210deg at 30% 30%,
+    rgba(255, 122, 24, 0.28),
+    rgba(255, 61, 119, 0.24),
+    rgba(168, 85, 247, 0.26),
+    rgba(255, 122, 24, 0.28)
+  );
+}
+.hero-mesh::after {
+  background: conic-gradient(
+    from 30deg at 70% 60%,
+    rgba(168, 85, 247, 0.22),
+    rgba(255, 61, 119, 0.2),
+    rgba(255, 122, 24, 0.22),
+    rgba(168, 85, 247, 0.22)
+  );
+  animation-delay: -13s;
+  animation-direction: alternate-reverse;
+}
+@keyframes mesh-drift {
+  0% {
+    transform: translate3d(-3%, -2%, 0) scale(1) rotate(0deg);
+  }
+  100% {
+    transform: translate3d(3%, 2%, 0) scale(1.12) rotate(8deg);
+  }
+}
+
+/* Hero count dot: a single cheap pulse, no shadow spam. */
+.pulse-dot {
+  position: relative;
+}
+.pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: pulse-ring 2.4s ease-out infinite;
+}
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+/* Press feedback for cards on touch; hover lift on pointer devices. */
+.offer-card {
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .offer-card:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-lg);
+  }
+}
+.offer-card:active {
+  transform: scale(0.985);
+  transition-duration: 0.12s;
+}
+
+/* Honour reduced-motion: no mesh drift, no pulse, no transforms. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-mesh::before,
+  .hero-mesh::after,
+  .pulse-dot::after {
+    animation: none !important;
+  }
+  .offer-card,
+  .offer-card:hover,
+  .offer-card:active {
+    transform: none !important;
+    transition: none !important;
+  }
+  html {
+    scroll-behavior: auto;
   }
 }

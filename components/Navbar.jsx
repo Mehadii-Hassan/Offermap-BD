@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Heart, MapPin, Sun, Moon, Plus, Home as HomeIcon, Map as MapIcon, Info } from "lucide-react";
@@ -37,12 +38,24 @@ function navLinks(t, pathname) {
 export default function Navbar() {
   const { theme, t, toggleTheme, toggleLang, lang } = useApp();
   const pathname = usePathname() || "/";
+  const [scrolled, setScrolled] = useState(false);
+
+  // Glass bar: transparent at the top, denser once the page scrolls.
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-40 w-full">
-      <div className="glass border-x-0 border-t-0 border-b lg:border-b-0">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <Logo />
+    <header
+      className={`sticky top-0 z-40 w-full transition-colors duration-300 ${
+        scrolled ? "glass-bar-solid" : "glass-bar"
+      }`}
+    >
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+        <Logo />
 
           {/* Desktop nav */}
           <nav className="hidden items-center gap-1 md:flex">
@@ -90,7 +103,6 @@ export default function Navbar() {
               {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
             </Button>
           </div>
-        </div>
       </div>
     </header>
   );

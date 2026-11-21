@@ -13,7 +13,7 @@ test("location: Uttara shows sections in order, no Rangpur offers, share link wo
 
   await page.goto(BASE + "/", { waitUntil: "networkidle", timeout: 60000 });
   await page.waitForTimeout(4000);
-  await page.waitForSelector(".no-scrollbar button", { timeout: 30000 });
+  await page.waitForSelector('.no-scrollbar[role="group"] button', { timeout: 30000 });
 
   // Read section headings in order.
   const headings = await page.$$eval("h2", (els) => els.map((e) => e.textContent.trim()));

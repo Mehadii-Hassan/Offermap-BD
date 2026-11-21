@@ -12,7 +12,7 @@ async function gotoNoErrors(page, path) {
 
 test("home loads with no console errors and chips work", async ({ page }) => {
   const errors = await gotoNoErrors(page, "/");
-  const chips = page.locator(".no-scrollbar button");
+  const chips = page.locator('.no-scrollbar[role="group"] button');
   await chips.first().waitFor({ state: "attached", timeout: 30000 });
   await page.waitForTimeout(1000);
   const n = await chips.count();
@@ -33,8 +33,8 @@ test("home loads with no console errors and chips work", async ({ page }) => {
 
 test("clear filters button appears and works", async ({ page }) => {
   await page.goto(BASE + "/", { waitUntil: "networkidle", timeout: 60000 });
-  await page.waitForSelector(".no-scrollbar button", { timeout: 30000 });
-  await page.locator(".no-scrollbar button").nth(1).click();
+  await page.waitForSelector('.no-scrollbar[role="group"] button', { timeout: 30000 });
+  await page.locator('.no-scrollbar[role="group"] button').nth(1).click();
   await page.waitForTimeout(500);
   const clear = page.getByText("Clear filters");
   if (await clear.count()) {

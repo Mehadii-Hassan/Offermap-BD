@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 
-export default function SectionHeading({ emoji, title, action }) {
+export default function SectionHeading({ emoji, title, count, action }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -10,14 +10,19 @@ export default function SectionHeading({ emoji, title, action }) {
       viewport={{ once: true }}
       className="mb-4 flex items-end justify-between gap-3"
     >
-      <h2 className="flex items-center gap-2 text-xl font-extrabold tracking-tight sm:text-2xl">
+      <h2 className="flex min-w-0 items-center gap-2 text-lg font-extrabold tracking-tight sm:text-2xl">
         <span
-          className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-tr from-accent-orange/30 to-accent-purple/30 text-lg"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-tr from-accent-orange/30 to-accent-purple/30 text-lg"
           aria-hidden
         >
           {emoji}
         </span>
-        {title}
+        <span className="truncate">{title}</span>
+        {count != null && (
+          <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold text-white/70">
+            {count}
+          </span>
+        )}
       </h2>
       {action}
     </motion.div>

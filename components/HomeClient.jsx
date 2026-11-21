@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { List, Map as MapIcon, X, Plus, MessageCircle, Share2 } from "lucide-react";
 import Hero from "./Hero";
 import FilterBar from "./FilterBar";
@@ -13,8 +11,8 @@ import MapView from "./MapView";
 import Confetti from "./Confetti";
 import { GridSkeleton } from "./Skeletons";
 import EmptyState from "./EmptyState";
-import OfferImage from "./OfferImage";
 import AdSlot from "./AdSlot";
+import CategoryRail from "./CategoryRail";
 import { useApp } from "@/lib/app-context";
 import {
   getAllOffers,
@@ -27,16 +25,7 @@ import { getPrecision } from "@/lib/precision";
 import { loadPlaces, addPlace, renamePlace, removePlace, getActivePlaceId, setActivePlaceId } from "@/lib/places";
 import MyPlaces from "./MyPlaces";
 
-const CategoryChips = dynamic(() => import("./CategoryChips"), {
-  ssr: false,
-  loading: () => (
-    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 py-1">
-      {[...Array(8)].map((_, i) => (
-        <div key={i} className="h-10 w-24 animate-pulse rounded-2xl bg-white/10" />
-      ))}
-    </div>
-  ),
-});
+const CategoryChips = CategoryRail;
 
 export default function HomeClient() {
   const { t } = useApp();
@@ -224,6 +213,18 @@ export default function HomeClient() {
   }, [allOffers, userCoords]);
   const showEmptyStateCard = near5Offers.length < 5;
 
+  // Live "N offers near you" counter (radius-aware, district pins excluded).
+  const nearYouCount = useMemo(() => {
+    if (userCoords == null) return 0;
+    return allOffers.filter((o) => {
+      if (o.nationwide === true) return true;
+      if (getPrecision(o) === "district") return false;
+      const d = distanceToOffer(o, userCoords.lat, userCoords.lng);
+      if (d == null || radiusInfo.radius == null) return true;
+      return d <= radiusInfo.radius;
+    }).length;
+  }, [allOffers, userCoords, radiusInfo.radius]);
+
   // Derive the curated sections from the single fetched list.
   // Offer count per category (normalized) for the chips.
 const categoryCounts = useMemo(() => {
@@ -291,20 +292,17 @@ const ending = useMemo(
       .slice(0, 8),
   [allOffers, activeCategory]
 );
-const topFive = useMemo(
-  () =>
-    [...allOffers]
-      .filter(appliesCategory)
-      .sort((a, b) => (b.viewsToday ?? 0) - (a.viewsToday ?? 0))
-      .slice(0, 5),
-  [allOffers, activeCategory]
-);
-const featured = useMemo(
-  () => allOffers.filter((o) => o.isFeatured && appliesCategory(o)).slice(0, 3),
-  [allOffers, activeCategory]
-);
 
-const nearOffers = useMemo(() => {
+  const todayBest = useMemo(
+    () =>
+      allOffers
+        .filter(appliesCategory)
+        .sort((a, b) => b.hotScore - a.hotScore)
+        .slice(0, 8),
+    [allOffers, activeCategory]
+  );
+
+  const nearOffers = useMemo(() => {
   if (!userCoords) return [];
   return [...allOffers]
     .filter((o) => {
@@ -529,7 +527,12 @@ const nearOffers = useMemo(() => {
           </button>
         </div>
       )}
-      <Hero onSearch={setQuery} onNearMe={handleNearMe} />
+      <Hero
+        onSearch={setQuery}
+        onNearMe={handleNearMe}
+        placeLabel={locName || ""}
+        nearbyCount={nearYouCount}
+      />
 
       <MyPlaces
         places={places}
@@ -713,19 +716,47 @@ const nearOffers = useMemo(() => {
               </div>
             ) : (
               <>
-                {/* Today's top 5 strip */}
+                {/* Today's best (featured carousel, snap scrolling) */}
                 <div className="mb-10">
-                  <SectionHeading emoji="🏆" title={t.todaysTop} />
-                  <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4">
-                    {topFive.map((o, i) => (
-                      <TopStrip key={o.id} offer={o} rank={i + 1} />
-                    ))}
-                  </div>
+                  <SectionHeading
+                    emoji="🔥"
+                    title={t.todaysBest}
+                    count={todayBest.length}
+                  />
+                  {loading ? (
+                    <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4">
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          className="h-[236px] w-[268px] shrink-0 animate-pulse rounded-2xl bg-white/5"
+                        />
+                      ))}
+                    </div>
+                  ) : todayBest.length > 0 ? (
+                    <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-1">
+                      {todayBest.map((o, i) => (
+                        <div
+                          key={o.id}
+                          className="w-[268px] shrink-0 snap-start"
+                        >
+                          <OfferCard
+                            offer={o}
+                            index={i}
+                            onFirstSave={handleFirstSave}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState />
+                  )}
                 </div>
+
+                <AdSlot variant="banner" className="mb-10 mt-2" />
 
                 {/* Hot right now */}
                 <div className="mb-10">
-                  <SectionHeading emoji="🔥" title={t.hotNow} />
+                  <SectionHeading emoji="✨" title={t.hotNow} count={hot.length} />
                   {loading ? (
                     <GridSkeleton />
                   ) : (
@@ -742,11 +773,13 @@ const nearOffers = useMemo(() => {
                   )}
                 </div>
 
-                <AdSlot variant="banner" className="mb-10 mt-2" />
-
                 {/* Ending soon */}
                 <div className="mb-10">
-                  <SectionHeading emoji="⏰" title={t.endingSoon} />
+                  <SectionHeading
+                    emoji="⏰"
+                    title={t.endingSoon}
+                    count={ending.length}
+                  />
                   {loading ? (
                     <GridSkeleton />
                   ) : (
@@ -765,7 +798,11 @@ const nearOffers = useMemo(() => {
 
                 {/* Near you */}
                 <div id="near-you" className="mb-10 scroll-mt-28">
-                  <SectionHeading emoji="📍" title={t.nearYou} />
+                  <SectionHeading
+                    emoji="📍"
+                    title={t.nearYou}
+                    count={nearOffers.length}
+                  />
                   {userCoords == null ? (
                     <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-8 text-center">
                       <p className="text-sm text-white/50">
@@ -794,7 +831,11 @@ const nearOffers = useMemo(() => {
                     if (sec.list.length === 0) return null;
                     return (
                       <div key={sec.key} className="mb-10">
-                        <SectionHeading emoji="📍" title={`${sec.title} (${sec.list.length})`} />
+                        <SectionHeading
+                          emoji="📍"
+                          title={sec.title}
+                          count={sec.list.length}
+                        />
                         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                           {sec.list.slice(0, 12).map((o, i) => (
                             <OfferCard
@@ -949,16 +990,9 @@ const nearOffers = useMemo(() => {
           </>
         )}
 
-        {/* Banner for featured / quick area quick links */}
-        {!searchRes && view === "list" && (
-          <AdSlot variant="banner" />
-        )}
       </main>
 
       <Confetti fire={fireConfetti} />
-
-      {/* eslint-disable-next-line react/no-unescaped-entities */}
-      <FeaturedStrip featured={featured} handleFirstSave={handleFirstSave} />
     </>
   );
 }
@@ -971,58 +1005,6 @@ function renderGrid(list, loading, onFirstSave) {
       {list.map((o, i) => (
         <OfferCard key={o.id} offer={o} index={i} onFirstSave={onFirstSave} />
       ))}
-    </div>
-  );
-}
-
-function TopStrip({ offer, rank }) {
-  const medals = ["🥇", "🥈", "🥉", "🧡", "💜"];
-  return (
-    <div className="flex min-w-[230px]">
-      <a href={`/offer/${offer.id}`} className="contents">
-        <motion.div
-          whileHover={{ y: -4 }}
-          className="flex h-full w-full items-center gap-3 rounded-2xl glass p-3 glow-hover"
-        >
-          <div className="relative w-16 shrink-0 overflow-hidden rounded-xl">
-            <OfferImage
-              offer={offer}
-              ratioClass="h-20 w-16"
-              placeholderClassName=""
-            />
-            <span className="absolute -left-1 -top-1">
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-gradient-to-tr from-accent-orange to-accent-pink text-xs font-bold">
-                {rank}
-              </span>
-            </span>
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-white">{offer.shopName}</div>
-            <div className="text-xs font-extrabold text-accent-pink">
-              {offer.discountText}
-            </div>
-            <div className="mt-0.5 text-[11px] text-white/50">
-              {offer.viewsToday} {offer.viewsToday && `${""}`}{" "}
-            </div>
-            <div className="text-[11px] text-white/50">{medals[rank - 1]} {offer.area}</div>
-          </div>
-        </motion.div>
-      </a>
-    </div>
-  );
-}
-
-function FeaturedStrip({ featured, handleFirstSave }) {
-  const { t } = useApp();
-  if (!featured.length) return null;
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <SectionHeading emoji="🌟" title={`${t.featured} ✨`} />
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {featured.map((o, i) => (
-          <OfferCard key={o.id} offer={o} index={i} onFirstSave={handleFirstSave} />
-        ))}
-      </div>
     </div>
   );
 }

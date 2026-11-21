@@ -210,6 +210,47 @@ check('j6-screens', () => {
   return { ok: false, reason: `only ${pngs.length} .png files` };
 });
 
+// ---- J3: home + offer card redesign ----
+
+check('j3-hero', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/j3.spec.js', '-g', 'j3: hero']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
+check('j3-sticky-bar', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/j3.spec.js', '-g', 'j3: sticky']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
+check('j3-cards', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/j3.spec.js', '-g', 'j3: cards']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
+check('j3-no-overflow-390', () => {
+  const r = run('npx', ['playwright', 'test', 'tests/e2e/j3.spec.js', '-g', 'j3: no-overflow']);
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) };
+});
+
+check('j3-screens', () => {
+  const dp = path.join(root, 'docs', 'screens');
+  const names = ['home-390-dark.png', 'home-390-light.png', 'home-1440-dark.png', 'home-1440-light.png'];
+  const missing = [];
+  let small = 0;
+  for (const n of names) {
+    const p = path.join(dp, n);
+    if (!fs.existsSync(p)) { missing.push(n); continue; }
+    if (fs.statSync(p).size <= 30 * 1024) small++;
+  }
+  if (missing.length) return { ok: false, reason: 'missing ' + missing.join(', ') };
+  if (small) return { ok: false, reason: `${small} screenshot(s) <= 30 KB` };
+  return { ok: true };
+});
+
 check('j6-lighthouse', () => {
   const p = path.join(root, 'docs', 'lighthouse.json');
   if (fs.existsSync(p)) return { ok: true };
