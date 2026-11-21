@@ -730,7 +730,7 @@ const ending = useMemo(
           <>
             {/* Map view */}
             {view === "map" ? (
-              <div className="mb-10 rounded-2xl overflow-hidden border border-white/10">
+              <div className="mb-10 h-[100dvh] overflow-hidden rounded-2xl border border-white/10">
                 <MapView
                   offers={filteredList}
                   userCoords={userCoords}
