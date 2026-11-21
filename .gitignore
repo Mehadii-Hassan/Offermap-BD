@@ -33,6 +33,11 @@ test-results/
 playwright-report/
 blob-report/
 
+# generated logs
+build.log
+e2e.log
+schema.log
+
 # runtime outlet-brand cache
 .outlet-brands.json
 .outlet-pages.json
