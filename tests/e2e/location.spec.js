@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { collectConsoleErrors } from "./helpers/console";
 
 const BASE = "http://localhost:3100";
 
@@ -8,9 +9,7 @@ test("location: Uttara shows sections in order, no Rangpur offers, share link wo
     permissions: ["geolocation"],
   });
   const page = await ctx.newPage();
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+  const errors = collectConsoleErrors(page);
 
   await page.goto(BASE + "/", { waitUntil: "networkidle", timeout: 60000 });
   await page.waitForTimeout(4000);

@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { collectConsoleErrors } from "./helpers/console";
 
 const BASE = "http://localhost:3100";
 
@@ -35,9 +36,7 @@ test("admin: /api/track stores a visit and dashboard shows numbers", async ({ pa
   expect(await trackRes.json()).toEqual({ ok: true });
 
   // 2) Log into /admin with the password and see the Dashboard with numbers.
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+  const errors = collectConsoleErrors(page);
   await page.goto(BASE + "/admin", { waitUntil: "networkidle", timeout: 60000 });
   await page.waitForTimeout(800);
   const pwInput = page.locator('input[type=password]');

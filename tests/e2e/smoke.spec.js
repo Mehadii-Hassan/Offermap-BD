@@ -1,13 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { collectConsoleErrors } from "./helpers/console";
 
 const BASE = "http://localhost:3100";
 
 async function gotoNoErrors(page, path) {
-  const errors = [];
-  page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-  page.on("console", (m) => {
-    if (m.type() === "error") errors.push("console: " + m.text());
-  });
+  const errors = collectConsoleErrors(page);
   await page.goto(BASE + path, { waitUntil: "networkidle", timeout: 60000 });
   await page.waitForTimeout(1200);
   return errors;

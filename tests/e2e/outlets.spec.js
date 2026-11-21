@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { seedE2E, cleanupE2E } from "./helpers/seed";
+import { collectConsoleErrors } from "./helpers/console";
 
 const BASE = "http://localhost:3100";
 const SHOP = "E2E Test Chain";
@@ -14,21 +15,13 @@ test.afterAll(async () => {
   await cleanupE2E();
 });
 
-function listenForErrors(page, errors) {
-  page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
-  page.on("console", (m) => {
-    if (m.type() === "error") errors.push(m.text());
-  });
-}
-
 test("outlets: chain offer shows nearest outlet, outlet list + map on detail, empty state, no console errors", async ({ browser }) => {
   const ctx = await browser.newContext({
     geolocation: { latitude: 23.8759, longitude: 90.3795 },
     permissions: ["geolocation"],
   });
   const page = await ctx.newPage();
-  const errors = [];
-  listenForErrors(page, errors);
+  const errors = collectConsoleErrors(page);
 
   await page.goto(BASE + "/", { waitUntil: "networkidle", timeout: 60000 });
   await page.waitForTimeout(4000);
@@ -62,8 +55,7 @@ test("outlets: chain offer shows nearest outlet, outlet list + map on detail, em
     permissions: ["geolocation"],
   });
   const page2 = await ctx2.newPage();
-  const errors2 = [];
-  listenForErrors(page2, errors2);
+  const errors2 = collectConsoleErrors(page2);
   await page2.goto(BASE, { waitUntil: "networkidle", timeout: 60000 });
   await page2.waitForTimeout(4000);
   await page2.waitForSelector(".no-scrollbar button", { timeout: 30000 });

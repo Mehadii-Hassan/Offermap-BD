@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = process.cwd();
+const LIVE_URL = 'https://offermap-bd.vercel.app/';
 const checks = [];
 
 function run(cmd, args) {
@@ -30,9 +31,13 @@ function walk(dir) {
 function check(name, fn) {
   try {
     const res = fn();
-    checks.push({ name, ok: !!res.ok, reason: res.reason || '' });
+    const entry = { name, ok: !!res.ok, reason: res.reason || '' };
+    checks.push(entry);
+    return entry;
   } catch (e) {
-    checks.push({ name, ok: false, reason: e.message });
+    const entry = { name, ok: false, reason: e.message };
+    checks.push(entry);
+    return entry;
   }
 }
 
@@ -54,7 +59,7 @@ check('clean-tree', () => {
   return { ok: false, reason: 'working tree is not clean' };
 });
 
-check('pushed', () => {
+const pushed = check('pushed', () => {
   const h = run('git', ['rev-parse', 'HEAD']);
   const o = run('git', ['rev-parse', 'origin/main']);
   if (!h.ok || !o.ok) return { ok: false, reason: 'cannot resolve revisions' };
@@ -63,15 +68,52 @@ check('pushed', () => {
 });
 
 check('deploy', () => {
-  const r = run('node', ['scripts/deploy-check.js']);
-  const lines = r.out.trim().split(/\r?\n/).filter(Boolean);
-  const last = lines.length ? lines[lines.length - 1] : '';
-  if (r.ok) {
-    const env = last.replace(/^SUCCESS\s*/i, '').trim();
-    return { ok: true, reason: env };
+  if (!pushed.ok) return { ok: false, reason: 'pushed did not pass; deploy poll skipped' };
+  const h = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
+  const head = (h.stdout || '').trim();
+  if (!head) return { ok: false, reason: 'cannot resolve HEAD' };
+
+  // Poll the deployed /api/version endpoint until it reports HEAD.
+  const script = `
+const url = process.argv[1];
+const head = process.argv[2];
+const attempts = Number(process.argv[3]);
+(async () => {
+  let lastStatus = 'none';
+  let lastSha = 'none';
+  let lastJson = true;
+  let ok = false;
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 20000));
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      lastStatus = String(res.status);
+      try {
+        const data = await res.json();
+        lastJson = true;
+        lastSha = data && typeof data.sha === 'string' ? data.sha : 'unknown';
+      } catch {
+        lastJson = false;
+        lastSha = 'non-JSON response';
+      }
+      if (lastSha === head) { ok = true; break; }
+    } catch (e) {
+      lastStatus = 'request failed: ' + e.message;
+    }
   }
-  const reason = last.replace(/^FAIL deploy\s*-\s*/i, '').trim();
-  return { ok: false, reason: reason || 'deploy check failed' };
+  if (ok) {
+    console.log('PASS deploy - live site runs ' + head.slice(0, 7));
+  } else {
+    console.log('FAIL deploy - live sha: ' + lastSha + ' | HEAD: ' + head + ' | last HTTP status: ' + lastStatus + (lastJson ? '' : ' | response was not JSON'));
+  }
+})();
+`;
+  const r = spawnSync(process.execPath, ['-e', script, LIVE_URL + 'api/version', head, '12'], { encoding: 'utf8' });
+  const out = ((r.stdout || '') + (r.stderr || '')).trim();
+  if (/^PASS deploy/.test(out)) {
+    return { ok: true, reason: out.replace(/^PASS deploy\s*-\s*/, '') };
+  }
+  return { ok: false, reason: out.replace(/^FAIL deploy\s*-\s*/, '') || 'deploy check failed' };
 });
 
 check('j1-header', () => {
