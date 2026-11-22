@@ -85,6 +85,45 @@ export default function AddOfferClient() {
   const [formValidTill, setFormValidTill] = useState(
     new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   );
+  // K8 stepper: Photo → Details → Location → Review.
+  const [step, setStep] = useState("photo");
+
+  const stepOrder = ["photo", "details", "location", "review"];
+
+  const isStepValid = () => {
+    switch (step) {
+      case "photo":
+        return true; // photo is optional
+      case "details":
+        return Boolean(
+          formTitle.trim() &&
+            formShopName.trim() &&
+            formDiscount.trim() &&
+            formArea.trim() &&
+            formPayment &&
+            formValidTill &&
+            formDescription.trim()
+        );
+      case "location":
+        return Boolean(
+          formAddress.trim() && isInsideBangladesh(formLat, formLng)
+        );
+      case "review":
+        return true;
+      default:
+        return false;
+    }
+  };
+
+  const goNext = () => {
+    const i = stepOrder.indexOf(step);
+    if (i < stepOrder.length - 1 && isStepValid()) setStep(stepOrder[i + 1]);
+  };
+
+  const goPrev = () => {
+    const i = stepOrder.indexOf(step);
+    if (i > 0) setStep(stepOrder[i - 1]);
+  };
   const [formDescription, setFormDescription] = useState("");
   const [formAddress, setFormAddress] = useState("");
   const [formPhone, setFormPhone] = useState("");
@@ -305,6 +344,7 @@ export default function AddOfferClient() {
     setFormDescription("");
     setFormAddress("");
     setFormPhone("");
+    setStep("photo");
     setMapCenter(DEFAULT_CENTER);
     setMapZoom(12);
     setLocation(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
@@ -450,6 +490,23 @@ export default function AddOfferClient() {
   const labelCls =
     "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-white/50";
 
+  const stepLabel = (s) => {
+    switch (s) {
+      case "photo":
+        return t.stepPhoto;
+      case "details":
+        return t.stepDetails;
+      case "location":
+        return t.stepLocation;
+      case "review":
+        return t.stepReview;
+      default:
+        return s;
+    }
+  };
+
+  const isActiveStep = (s) => step === s;
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <header className="mb-8">
@@ -457,251 +514,326 @@ export default function AddOfferClient() {
         <p className="text-white/50">{t.addOfferSubtitle}</p>
       </header>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <input
-            ref={scanInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleScanFile}
-          />
-          <button
-            type="button"
-            onClick={() => scanInputRef.current && scanInputRef.current.click()}
-            disabled={scanning}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-accent-purple/50 bg-accent-purple/10 px-4 py-4 text-sm font-semibold text-accent-purple hover:bg-accent-purple/20 transition disabled:opacity-60"
-          >
-            {scanning ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> AI is reading your photo…</>
-            ) : (
-              <>📸 Upload offer photo / screenshot (AI fills the form)</>
-            )}
-          </button>
-          {photoError && <p className="mt-1 text-sm text-pink-500">{photoError}</p>}
-        </div>
-        <div>
-          <label className={labelCls}>{t.shopName}</label>
-          <input
-            className={inputCls}
-            value={formShopName}
-            onChange={(e) => setFormShopName(e.target.value)}
-            placeholder="e.g. Sweet Sensation Cafe"
-            required
-          />
-        </div>
-
-        <div>
-          <label className={labelCls}>{t.offerTitleLabel}</label>
-          <input
-            className={inputCls}
-            value={formTitle}
-            onChange={(e) => setFormTitle(e.target.value)}
-            placeholder="e.g. 30% off all menu items"
-            required
-          />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={labelCls}>{t.discountTextLabel}</label>
-            <input
-              className={inputCls}
-              value={formDiscount}
-              onChange={(e) => setFormDiscount(e.target.value)}
-              placeholder="e.g. 30% OFF"
-              required
-            />
-          </div>
-          <div>
-            <label className={labelCls}>{t.categoryLabel}</label>
-            <select
-              className={inputCls}
-              value={formCategory}
-              onChange={(e) => setFormCategory(e.target.value)}
-              required
+      {/* K8 stepper progress */}
+      <div className="mb-6 flex items-center justify-between gap-2">
+        {stepOrder.map((s, i) => (
+          <div key={s} className="flex flex-col items-center gap-1">
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
+                isActiveStep(s)
+                  ? "bg-gradient-to-tr from-accent-orange to-accent-pink text-white shadow-lg"
+                  : "bg-white/5 text-white/40"
+              }`}
             >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c} className="bg-base">
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={labelCls}>{t.filterDivision}</label>
-            <select
-              className={inputCls}
-              value={formDivision}
-              onChange={(e) => handleDivisionChange(e.target.value)}
-              required
-            >
-              {divisions.map((d) => (
-                <option key={d.name} value={d.name} className="bg-base">
-                  {d.name} · {d.bn}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>{t.filterDistrict}</label>
-            <select
-              className={inputCls}
-              value={formDistrict}
-              onChange={(e) => handleDistrictChange(e.target.value)}
-              required
-            >
-              {districts.map((d) => (
-                <option key={d} value={d} className="bg-base">
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className={labelCls}>{t.areaLabel}</label>
-          <input
-            className={inputCls}
-            value={formArea}
-            onChange={(e) => setFormArea(e.target.value)}
-            placeholder="e.g. Dhanmondi, Gulshan, Banani..."
-            required
-          />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={labelCls}>{t.paymentLabel}</label>
-            <select
-              className={inputCls}
-              value={formPayment}
-              onChange={(e) => setFormPayment(e.target.value)}
-              required
-            >
-              {PAYMENT_METHODS.map((p) => (
-                <option key={p} value={p} className="bg-base">
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>{t.validTillLabel}</label>
-            <input
-              type="date"
-              className={inputCls}
-              value={formValidTill}
-              onChange={(e) => setFormValidTill(e.target.value)}
-              required
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className={labelCls}>{t.descriptionLabel}</label>
-          <textarea
-            className={`${inputCls} resize-none`}
-            rows={3}
-            value={formDescription}
-            onChange={(e) => setFormDescription(e.target.value)}
-            placeholder="Tell us more about this offer..."
-            required
-          />
-        </div>
-
-        <div>
-          <label className={labelCls}>{t.phoneLabel}</label>
-          <input
-            className={inputCls}
-            value={formPhone}
-            onChange={(e) => setFormPhone(e.target.value)}
-            placeholder="01700000000"
-            inputMode="tel"
-          />
-        </div>
-
-        <div>
-          <label className={labelCls}>{t.addressLabel}</label>
-          <div className="rounded-xl border border-white/15 bg-white/5 p-3">
-            <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-white/50" />
-              <input
-                className="flex-1 rounded-lg border-0 bg-transparent text-sm text-white outline-none placeholder:text-white/30"
-                value={searchQuery}
-                onChange={handleSearchChange}
-                placeholder={t.searchAddress}
-                aria-label="Search address"
+              {stepLabel(s)}
+            </span>
+            {i < stepOrder.length - 1 && (
+              <span
+                className="h-[1px] w-6 flex-1 self-center bg-white/20"
               />
-              {searching && <Loader2 className="w-4 h-4 animate-spin text-white/50" />}
-            </div>
-            {searchResults.length > 0 && (
-              <div className="mt-3 max-h-44 overflow-y-auto rounded-lg border border-white/10 bg-base/80">
-                {searchResults.map((r) => (
-                  <button
-                    key={r.place_id}
-                    type="button"
-                    onClick={() => pickSearchResult(r)}
-                    className="block w-full px-3 py-2 text-left text-sm text-white/80 hover:bg-white/5 transition"
-                  >
-                    <span className="block truncate">{r.display_name}</span>
-                    <span className="block text-[10px] text-white/40">
-                      {r.type ? `${r.type}, ` : ""}
-                      {r.city || r.village || r.town || ""}
-                    </span>
-                  </button>
-                ))}
-              </div>
             )}
           </div>
+        ))}
+      </div>
 
-          <LocationPickerMap
-            center={mapCenter}
-            zoom={mapZoom}
-            markerLat={markerLat}
-            markerLng={markerLng}
-            onMapClick={handleMapClick}
-            onCurrentLocation={handleCurrentLocation}
-            markerLabel={formArea}
-            markerAddress={formAddress}
-          />
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Step: Photo */}
+        {step === "photo" && (
+          <div className="space-y-4">
+            <div>
+              <input
+                ref={scanInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleScanFile}
+              />
+              <button
+                type="button"
+                onClick={() => scanInputRef.current && scanInputRef.current.click()}
+                disabled={scanning}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-accent-purple/50 bg-accent-purple/10 px-4 py-4 text-sm font-semibold text-accent-purple hover:bg-accent-purple/20 transition disabled:opacity-60"
+              >
+                {scanning ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> AI is reading your photo…</>
+                ) : (
+                  <>📸 Upload offer photo / screenshot (AI fills the form)</>
+                )}
+              </button>
+              {photoError && <p className="mt-1 text-sm text-pink-500">{photoError}</p>}
+            </div>
+            <div>
+              <label className={labelCls}>{t.photoLabel}</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoChange}
+                className={`${inputCls} cursor-pointer`}
+              />
+              {photoError && <p className="mt-1 text-sm text-pink-500">{photoError}</p>}
+              {photoPreview && (
+                <img
+                  src={photoPreview}
+                  alt="Preview"
+                  className="mt-3 h-32 w-32 rounded-xl object-cover border border-white/10"
+                />
+              )}
+            </div>
+          </div>
+        )}
 
-          {(formArea || formAddress) && (
-            <p className="mt-2 text-sm font-semibold text-emerald-300">
-              📍 {formArea || formAddress}
-            </p>
-          )}
+        {/* Step: Details */}
+        {step === "details" && (
+          <div className="space-y-4">
+            <div>
+              <label className={labelCls}>{t.shopName}</label>
+              <input
+                className={inputCls}
+                value={formShopName}
+                onChange={(e) => setFormShopName(e.target.value)}
+                placeholder="e.g. Sweet Sensation Cafe"
+                required
+              />
+            </div>
 
-          <textarea
-            className={`${inputCls} mt-3 resize-none`}
-            rows={2}
-            value={formAddress}
-            onChange={(e) => setFormAddress(e.target.value)}
-            placeholder={t.addressLabel}
-          />
-        </div>
+            <div>
+              <label className={labelCls}>{t.offerTitleLabel}</label>
+              <input
+                className={inputCls}
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+                placeholder="e.g. 30% off all menu items"
+                required
+              />
+            </div>
 
-        <div>
-          <label className={labelCls}>{t.photoLabel}</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoChange}
-            className={`${inputCls} cursor-pointer`}
-          />
-          {photoError && <p className="mt-1 text-sm text-pink-500">{photoError}</p>}
-          {photoPreview && (
-            <img
-              src={photoPreview}
-              alt="Preview"
-              className="mt-3 h-32 w-32 rounded-xl object-cover border border-white/10"
-            />
-          )}
-        </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>{t.discountTextLabel}</label>
+                <input
+                  className={inputCls}
+                  value={formDiscount}
+                  onChange={(e) => setFormDiscount(e.target.value)}
+                  placeholder="e.g. 30% OFF"
+                  required
+                />
+              </div>
+              <div>
+                <label className={labelCls}>{t.categoryLabel}</label>
+                <select
+                  className={inputCls}
+                  value={formCategory}
+                  onChange={(e) => setFormCategory(e.target.value)}
+                  required
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c} className="bg-base">
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>{t.filterDivision}</label>
+                <select
+                  className={inputCls}
+                  value={formDivision}
+                  onChange={(e) => handleDivisionChange(e.target.value)}
+                  required
+                >
+                  {divisions.map((d) => (
+                    <option key={d.name} value={d.name} className="bg-base">
+                      {d.name} · {d.bn}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>{t.filterDistrict}</label>
+                <select
+                  className={inputCls}
+                  value={formDistrict}
+                  onChange={(e) => handleDistrictChange(e.target.value)}
+                  required
+                >
+                  {districts.map((d) => (
+                    <option key={d} value={d} className="bg-base">
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className={labelCls}>{t.areaLabel}</label>
+              <input
+                className={inputCls}
+                value={formArea}
+                onChange={(e) => setFormArea(e.target.value)}
+                placeholder="e.g. Dhanmondi, Gulshan, Banani..."
+                required
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>{t.paymentLabel}</label>
+                <select
+                  className={inputCls}
+                  value={formPayment}
+                  onChange={(e) => setFormPayment(e.target.value)}
+                  required
+                >
+                  {PAYMENT_METHODS.map((p) => (
+                    <option key={p} value={p} className="bg-base">
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>{t.validTillLabel}</label>
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={formValidTill}
+                  onChange={(e) => setFormValidTill(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelCls}>{t.descriptionLabel}</label>
+              <textarea
+                className={`${inputCls} resize-none`}
+                rows={3}
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                placeholder="Tell us more about this offer..."
+                required
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>{t.phoneLabel}</label>
+              <input
+                className={inputCls}
+                value={formPhone}
+                onChange={(e) => setFormPhone(e.target.value)}
+                placeholder="01700000000"
+                inputMode="tel"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Step: Location */}
+        {step === "location" && (
+          <div className="space-y-4">
+            <div>
+              <label className={labelCls}>{t.addressLabel}</label>
+              <div className="rounded-xl border border-white/15 bg-white/5 p-3">
+                <div className="flex items-center gap-2">
+                  <Search className="w-4 h-4 text-white/50" />
+                  <input
+                    className="flex-1 rounded-lg border-0 bg-transparent text-sm text-white outline-none placeholder:text-white/30"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    placeholder={t.searchAddress}
+                    aria-label="Search address"
+                  />
+                  {searching && <Loader2 className="w-4 h-4 animate-spin text-white/50" />}
+                </div>
+                {searchResults.length > 0 && (
+                  <div className="mt-3 max-h-44 overflow-y-auto rounded-lg border border-white/10 bg-base/80">
+                    {searchResults.map((r) => (
+                      <button
+                        key={r.place_id}
+                        type="button"
+                        onClick={() => pickSearchResult(r)}
+                        className="block w-full px-3 py-2 text-left text-sm text-white/80 hover:bg-white/5 transition"
+                      >
+                        <span className="block truncate">{r.display_name}</span>
+                        <span className="block text-[10px] text-white/40">
+                          {r.type ? `${r.type}, ` : ""}
+                          {r.city || r.village || r.town || ""}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <LocationPickerMap
+                center={mapCenter}
+                zoom={mapZoom}
+                markerLat={markerLat}
+                markerLng={markerLng}
+                onMapClick={handleMapClick}
+                onCurrentLocation={handleCurrentLocation}
+                markerLabel={formArea}
+                markerAddress={formAddress}
+              />
+
+              {(formArea || formAddress) && (
+                <p className="mt-2 text-sm font-semibold text-emerald-300">
+                  📍 {formArea || formAddress}
+                </p>
+              )}
+
+              <textarea
+                className={`${inputCls} mt-3 resize-none`}
+                rows={2}
+                value={formAddress}
+                onChange={(e) => setFormAddress(e.target.value)}
+                placeholder={t.addressLabel}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Step: Review */}
+        {step === "review" && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="grid gap-2 sm:grid-cols-2 text-sm">
+                <div>
+                  <span className="block text-xs text-white/40">{t.shopName}</span>
+                  <span className="font-semibold text-white">{formShopName}</span>
+                </div>
+                <div>
+                  <span className="block text-xs text-white/40">{t.offerTitleLabel}</span>
+                  <span className="font-semibold text-white">{formTitle}</span>
+                </div>
+                <div>
+                  <span className="block text-xs text-white/40">{t.discountTextLabel}</span>
+                  <span className="font-semibold text-white">{formDiscount}</span>
+                </div>
+                <div>
+                  <span className="block text-xs text-white/40">{t.categoryLabel}</span>
+                  <span className="font-semibold text-white">{formCategory}</span>
+                </div>
+                <div>
+                  <span className="block text-xs text-white/40">{t.areaLabel}</span>
+                  <span className="font-semibold text-white">{formArea}</span>
+                </div>
+                <div>
+                  <span className="block text-xs text-white/40">{t.addressLabel}</span>
+                  <span className="font-semibold text-white">{formAddress}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="block text-xs text-white/40">{t.descriptionLabel}</span>
+                  <span className="font-semibold text-white">{formDescription}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <p className="flex items-center gap-2 text-sm text-pink-500">
@@ -709,21 +841,46 @@ export default function AddOfferClient() {
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-tr from-pink-600 to-purple-700 px-6 py-3 text-lg font-semibold text-white hover:opacity-90 transition ${
-            submitting ? "opacity-50 cursor-not-allowed" : ""
-          }`}
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" /> {t.submitting}
-            </>
-          ) : (
-            t.submitOffer
+        <div className="mt-6 flex items-center justify-between gap-3">
+          {step !== "photo" && (
+            <button
+              type="button"
+              onClick={goPrev}
+              disabled={submitting}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold text-white/70 hover:bg-white/10 transition disabled:opacity-60"
+            >
+              {t.stepPrev}
+            </button>
           )}
-        </button>
+          {step === "review" ? (
+            <button
+              type="submit"
+              disabled={submitting || !isStepValid()}
+              className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-tr from-pink-600 to-purple-700 px-6 py-3 text-lg font-semibold text-white hover:opacity-90 transition ${
+                submitting || !isStepValid() ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> {t.submitting}
+                </>
+              ) : (
+                t.submitOffer
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={submitting || !isStepValid()}
+              className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-tr from-accent-orange to-accent-pink px-6 py-3 text-lg font-semibold text-white shadow-lg shadow-accent-pink/30 hover:opacity-90 transition ${
+                submitting || !isStepValid() ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+            >
+              {t.stepNext}
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );
