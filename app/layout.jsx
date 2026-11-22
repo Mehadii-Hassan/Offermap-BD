@@ -2,6 +2,7 @@ import "./globals.css";
 import { Plus_Jakarta_Sans, Hind_Siliguri } from "next/font/google";
 import { AppProvider } from "@/lib/app-context";
 import VisitTracker from "@/components/VisitTracker";
+import ErrorMonitor from "@/components/ErrorMonitor";
 import { APP_BASE, DEFAULT_OG_IMAGE, websiteJsonLd } from "@/lib/meta";
 
 // Self-hosted (next/font) Latin + Bangla fonts. The Latin font is first in the
@@ -78,6 +79,7 @@ export default function RootLayout({ children }) {
       <body>
         <AppProvider>{children}</AppProvider>
         <VisitTracker />
+        <ErrorMonitor />
       </body>
     </html>
   );

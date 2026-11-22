@@ -101,6 +101,25 @@ export default function AdminDashboard({ onDeleteExpired, busyDelete }) {
   const v = stats.visitors;
   const act = stats.activity;
 
+  // Errors in the last 24h from client_error events.
+  const now = Date.now();
+  const dayAgo = now - 24 * 60 * 60 * 1000;
+  const errEvents = (act.events || []).filter(
+    (e) => e.event === "client_error" && new Date(e.created_at).getTime() > dayAgo
+  );
+  const errCount = errEvents.length;
+  const errTop = [...errEvents]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+
+  // Last scrape run age warning (>36h old or failed).
+  const runs = act.scrape_runs || [];
+  const lastRun = runs.length ? runs[0] : null;
+  const scrapeStale = lastRun
+    ? now - new Date(lastRun.started_at).getTime() > 36 * 60 * 60 * 1000
+    : true;
+  const scrapeFailed = lastRun ? (lastRun.errors || 0) > 0 || (lastRun.inserted || 0) === 0 : false;
+
   return (
     <div className="space-y-4">
       {/* Dashboard actions */}
@@ -235,6 +254,43 @@ export default function AdminDashboard({ onDeleteExpired, busyDelete }) {
           <BarChart data={o.visitors_by_day?.map((a) => ({ d: a.d, c: a.c }))} type="bar" />
         </div>
       </Section>
+
+      {/* ERRORS */}
+      {errCount > 0 && (
+        <Section title="Errors in the last 24h" icon={<FileWarning size={16} className="text-red-300" />}>
+          <div className="space-y-1.5">
+            <div className="text-xs font-bold text-red-300">{errCount} client error(s)</div>
+            <ul className="space-y-1">
+              {errTop.map((e) => (
+                <li key={e.id} className="flex items-center justify-between gap-2 text-xs text-white/60">
+                  <span className="truncate truncate-md">{e.detail || e.event}</span>
+                  <span className="shrink-0 text-white/35">{new Date(e.created_at).toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Section>
+      )}
+      {errCount === 0 && (
+        <div className="glass rounded-2xl p-4 border border-emerald-500/20">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={15} className="text-emerald-300" />
+            <span className="text-xs text-emerald-200 font-medium">No client errors in the last 24h.</span>
+          </div>
+        </div>
+      )}
+
+      {/* SCRAPE WARNING */}
+      {(scrapeStale || scrapeFailed) && (
+        <div className="glass rounded-2xl p-4 border border-red-500/40 bg-red-500/10">
+          <div className="flex items-center gap-2">
+            <FileWarning size={16} className="text-red-300" />
+            <span className="text-sm font-bold text-red-200">
+              {scrapeStale ? "Last scrape run is older than 36h" : "Last scrape run failed"}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ACTIVITY */}
       <Section title={t.adminActivityLog} icon={<Activity size={16} className="text-accent-pink" />}>
