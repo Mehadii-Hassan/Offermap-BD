@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function sitemap() {
   const lastmod = new Date().toISOString();
-  const staticPages = ["", "/saved", "/add", "/about", "/privacy", "/contact"];
+  const staticPages = ["", "/saved", "/add", "/about", "/privacy", "/contact", "/terms"];
 
   const staticEntries = staticPages.map((slug) => ({
     url: `${APP_BASE}${slug}`,

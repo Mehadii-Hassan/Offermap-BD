@@ -68,18 +68,31 @@ export default function OfferDetailClient({ offer }) {
   const [fireConfetti, setFireConfetti] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reported, setReported] = useState(false);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportReason, setReportReason] = useState("not_working");
+  const [reportContact, setReportContact] = useState("");
 
   async function handleReport() {
     if (reporting || reported) return;
+    setShowReportForm(true);
+  }
+
+  async function submitReport() {
+    if (reporting) return;
     setReporting(true);
     try {
       const res = await fetch("/api/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ offer_id: offer.id, reason: "expired" }),
+        body: JSON.stringify({
+          offer_id: offer.id,
+          reason: reportReason,
+          contact: reportContact || undefined,
+        }),
       });
       if (res.ok) {
         setReported(true);
+        setShowReportForm(false);
       }
     } catch (e) {
       console.error(e);
@@ -217,6 +230,14 @@ export default function OfferDetailClient({ offer }) {
               </a>
             </div>
           )}
+          {offer.source === "scraper" && offer.createdAt && (
+            <div className="mb-4 text-right text-[11px] text-white/40">
+              {t.lastChecked}: {formatDate(offer.createdAt)}
+            </div>
+          )}
+          <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/50">
+            {t.publicSourcesNote}
+          </div>
           {offer.address && (
             <div className="mb-6 flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/70">
               <MapPin size={16} className="mt-0.5 shrink-0 text-accent-orange" />
@@ -406,18 +427,68 @@ export default function OfferDetailClient({ offer }) {
         >
           <Share2 size={16} /> {t.shareMessenger}
         </a>
-        <button
-          onClick={handleReport}
-          disabled={reporting || reported}
-          className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-bold transition ${
-            reported
+        {showReportForm ? (
+          <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-5">
+            <h3 className="mb-3 text-lg font-bold text-white">{t.reportTitle}</h3>
+            <div className="space-y-2 mb-4">
+              {[
+                { value: "not_working", label: "Not working / fake" },
+                { value: "expired", label: "Expired offer" },
+                { value: "shop_request", label: t.reportShopOwner },
+              ].map((r) => (
+                <label
+                  key={r.value}
+                  className="flex items-center gap-2 cursor-pointer text-sm text-white/70"
+                >
+                  <input
+                    type="radio"
+                    name="reportReason"
+                    checked={reportReason === r.value}
+                    onChange={() => setReportReason(r.value)}
+                    className="rounded text-accent-pink"
+                  />
+                  {r.label}
+                </label>
+              ))}
+            </div>
+            <div className="mb-4">
+              <label className="block mb-1 text-xs text-white/50">{t.reportContact}</label>
+              <input
+                type="text"
+                placeholder={t.reportContactPlaceholder}
+                value={reportContact}
+                onChange={(e) => setReportContact(e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder-white/30 focus:border-accent-purple"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={submitReport}
+                disabled={reporting}
+                className="flex-1 rounded-xl bg-gradient-to-tr from-accent-orange to-accent-pink px-5 py-3 font-bold text-white shadow-lg shadow-accent-pink/30 hover:opacity-90 transition disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {reporting ? "..." : t.reportSubmit}
+              </button>
+              <button
+                onClick={() => setShowReportForm(false)}
+                className="rounded-xl border border-white/15 bg-white/5 px-5 py-3 font-bold text-white/70 hover:bg-white/10 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={handleReport}
+            disabled={reporting || reported}
+            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-bold transition ${reported
               ? "bg-emerald-500/20 text-emerald-200 cursor-default"
-              : "border border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/25 disabled:opacity-60"
-          }`}
-        >
-          <Flag size={16} />
-          {reported ? t.reportSuccess : reporting ? "..." : t.report}
-        </button>
+              : "border border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/25 disabled:opacity-60"}`}
+          >
+            <Flag size={16} />
+            {reported ? t.reportSuccess : reporting ? "..." : t.report}
+          </button>
+        )}
       </div>
 
       <Confetti fire={fireConfetti} />

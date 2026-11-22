@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { MapPin } from "lucide-react";
+import { MapPin, Mail, Share2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
+
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "";
+const FACEBOOK_URL = process.env.NEXT_PUBLIC_FACEBOOK_URL || "";
 
 export default function Footer() {
   const { t } = useApp();
@@ -17,7 +20,11 @@ export default function Footer() {
   const legal = [
     { href: "/privacy", label: t.privacyTitle },
     { href: "/about", label: t.aboutTitle },
+    { href: "/terms", label: t.termsTitle },
   ];
+  const contact = [];
+  if (CONTACT_EMAIL) contact.push({ href: `mailto:${CONTACT_EMAIL}`, label: CONTACT_EMAIL, icon: <Mail size={16} /> });
+  if (FACEBOOK_URL) contact.push({ href: FACEBOOK_URL, label: t.facebookPage, icon: <Share2 size={16} /> });
   const locations = [
     { href: "/offers/dhaka", label: "Dhaka" },
     { href: "/offers/chattogram", label: "Chattogram" },
@@ -81,6 +88,27 @@ export default function Footer() {
             ))}
           </ul>
         </div>
+
+        {contact.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-white/80">{t.contact}</h4>
+            <ul className="mt-3 space-y-2 text-sm text-white/50">
+              {contact.map((c) => (
+                <li key={c.href} className="flex items-center gap-2">
+                  {c.icon}
+                  <Link
+                    href={c.href}
+                    target={c.href.startsWith("http") ? "_blank" : undefined}
+                    rel="noopener noreferrer"
+                    className="hover:text-white transition"
+                  >
+                    {c.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       <div className="mx-auto mt-8 max-w-6xl border-t border-white/5 px-4 pt-6 text-center text-xs text-white/30">
         © {new Date().getFullYear()} OfferMap BD. {t.rights}

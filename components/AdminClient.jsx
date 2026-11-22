@@ -409,6 +409,15 @@ export default function AdminClient() {
                     >
                       <Trash2 size={13} /> {t.adminDelete}
                     </button>
+                    {o.status !== "removed" && (
+                      <button
+                        onClick={() => runAction(o.id, "shop_request")}
+                        disabled={busyId === o.id}
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-orange-500/40 px-2 py-2 text-xs font-bold text-orange-300 hover:bg-orange-500/10 disabled:opacity-60"
+                      >
+                        <Trash size={13} /> {t.adminRemoveShopRequest}
+                      </button>
+                    )}
                   </div>
                 )}
               </motion.article>

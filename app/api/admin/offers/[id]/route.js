@@ -49,6 +49,12 @@ export async function PATCH(req, { params }) {
         updates.location_precision = cur ? getPrecision(cur) : undefined;
       }
       break;
+    case "shop_request":
+      // Shop owner asked for removal or correction. Mark as removed so it is
+      // no longer public, but keep the record for audit.
+      updates.status = "removed";
+      updates.removed_reason = "shop_request";
+      break;
     default:
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }

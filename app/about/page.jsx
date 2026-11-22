@@ -32,40 +32,40 @@ export default function AboutPage() {
           <section>
             <h2 className="mb-2 text-xl font-bold text-white">Our mission</h2>
             <p>
-              Discover data shows most shoppers in Bangladesh miss out on
-              genuine savings because offers are scattered across social media,
-              billboards and storefronts. OfferMap BD brings every discount,
-              deal and hot offer into one beautiful, location-aware place — so
-              you can find the best value around your neighbourhood in seconds.
+              Shoppers in Bangladesh miss out on genuine savings because offers
+              are scattered across social media, billboards and storefronts.
+              OfferMap BD brings every discount, deal and hot offer into one
+              location-aware place — so you can find the best value around your
+              neighbourhood in seconds.
             </p>
           </section>
 
           <section>
             <h2 className="mb-2 text-xl font-bold text-white">How it works</h2>
             <p>
-              We curate and verify offers from across Bangladesh — restaurants,
-              fashion, electronics, salons, grocers and entertainment. Every
-              listing includes the discount, validity, area and how to pay. Use
-              your location to see what&apos;s nearest, save your favourites,
-              and tap working or not working to help the community.
+              Offers are collected from public sources and submitted by shops.
+              Every listing includes the discount, validity, area and how to pay.
+              Use your location to see what&apos;s nearest, save your favourites,
+              and tap working or not working to help the community. Offers may
+              change or expire — always confirm with the shop before going.
             </p>
           </section>
 
           <section>
-            <h2 className="mb-2 text-xl font-bold text-white">What we promise</h2>
-            <ul className="list-inside space-y-2">
-              <li>• Deals that are real, current and clearly described.</li>
-              <li>• Transparent payment methods and validity dates.</li>
-              <li>• A fast, friendly, phone-first experience.</li>
-              <li>• Your data stays private and on your device.</li>
-            </ul>
+            <h2 className="mb-2 text-xl font-bold text-white">Your data</h2>
+            <p>
+              We count anonymous page views to understand what&apos;s popular. We
+              never identify you. Saved offers and places stay in your
+              browser&apos;s localStorage on your device. Your location is used
+              only in your browser to sort offers by distance — it is never
+              stored on our servers. Maps use OpenStreetMap/Nominatim lookups,
+              and offer photos may be sent to Google&apos;s Gemini API to
+              extract discount details.
+            </p>
           </section>
         </div>
 
         <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat value="30+" label="Live offers" />
-          <Stat value="64" label="Districts covered" />
-          <Stat value="13" label="Categories" />
           <Stat value="100%" label="Free to use" />
         </div>
       </main>
