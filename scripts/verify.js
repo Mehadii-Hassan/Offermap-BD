@@ -193,19 +193,13 @@ function noSecrets() {
 // ---------- e2e ----------
 function runE2E() {
   ensureLogsDir();
-  const logFile = path.join(LOGS_DIR, "e2e.txt");
-  const child = spawn("npx", ["playwright", "test", "--reporter=line"], {
-    cwd: root, stdio: ["ignore", "pipe", "pipe"],
+  const logFile = path.join(LOGS_DIR, "e2e.txt").replace(/\\/g, "/");
+  const child = spawn(`npx playwright test --reporter=line > "${logFile}" 2>&1`, {
+    cwd: root, shell: true, detached: true, stdio: "ignore",
   });
-  const out = fs.createWriteStream(logFile, { flags: "w" });
-  child.stdout.pipe(out, { end: false });
-  child.stderr.pipe(out, { end: false });
-  child.on("close", (code) => {
-    out.end();
-    fs.appendFileSync(logFile, `\n\nEXIT CODE: ${code}\n`);
-    console.log(`verify:e2e finished with exit code ${code}; see logs/e2e.txt`);
-  });
-  console.log(`verify:e2e started in background; logging to logs/e2e.txt`);
+  child.unref();
+  fs.writeFileSync(logFile, "verify:e2e started...\n");
+  console.log(`verify:e2e started in background (PID ${child.pid}); logging to logs/e2e.txt`);
 }
 
 // ---------- main ----------
