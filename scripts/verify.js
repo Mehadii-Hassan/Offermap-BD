@@ -145,7 +145,7 @@ function checkRls() {
   const rlspath = path.join(root, "scripts", "check-rls.mjs");
   if (!fs.existsSync(rlspath)) return { ok: false, reason: "scripts/check-rls.mjs missing" };
   try {
-    const out = execSync("node " + rlspath, { encoding: "utf8", timeout: 120000, env: { ...process.env, FORCE_COLOR: "0" } });
+    const out = execSync(`node --env-file=.env.local ${rlspath}`, { encoding: "utf8", timeout: 120000, env: { ...process.env, FORCE_COLOR: "0" } });
     if (/ALL RLS CHECKS PASSED/.test(out)) return { ok: true, reason: lastN(out) };
     return { ok: false, reason: lastN(out) || "check-rls did not report pass" };
   } catch (e) {
@@ -154,21 +154,40 @@ function checkRls() {
 }
 
 // ---------- secrets ----------
+function walkFiles(dir) {
+  let results = [];
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) results = results.concat(walkFiles(p));
+      else results.push(p);
+    }
+  } catch (e) { /* ignore */ }
+  return results;
+}
+
 function noSecrets() {
   const nextDir = path.join(root, ".next");
   if (!fs.existsSync(nextDir)) {
     return { ok: false, reason: ".next missing; run `npm run build` first, then verify:secrets" };
   }
-  try {
-    const out = execSync(
-      "npx grep -rIl -E 'service_role|sb_secret|DATABASE_URL|GEMINI_API_KEY|TAVILY' .next/static .next/server 2>$null || true",
-      { shell: true, encoding: "utf8", timeout: 120000 }
-    );
-    if (out.trim() === "") return { ok: true };
-    return { ok: false, reason: "secrets found in build output:\n" + out.slice(0, 500) };
-  } catch (e) {
-    return { ok: false, reason: e.message };
+  const patterns = [/service_role/i, /sb_secret/i, /DATABASE_URL/i, /GEMINI_API_KEY/i, /TAVILY/i];
+  const found = [];
+  const dirs = [path.join(nextDir, "static")];
+  for (const d of dirs) {
+    if (!fs.existsSync(d)) continue;
+    for (const file of walkFiles(d)) {
+      try {
+        const content = fs.readFileSync(file, "utf8");
+        for (const pat of patterns) {
+          if (pat.test(content)) found.push(`${path.relative(root, file)}: matches ${pat}`);
+        }
+      } catch (e) { /* skip binary/unreadable */ }
+    }
   }
+  if (found.length) return { ok: false, reason: "secrets found in build output:\n" + found.slice(0, 20).join("\n") };
+  return { ok: true };
 }
 
 // ---------- e2e ----------
