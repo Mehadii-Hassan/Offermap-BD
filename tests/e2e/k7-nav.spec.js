@@ -7,7 +7,7 @@ const BASE = "http://localhost:3100";
 test("K7: bottom nav is floating with centred add", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(BASE + "/", { waitUntil: "networkidle", timeout: 60000 });
-  const addLink = page.getByRole("link", { name: /Add/i }).first();
+  const addLink = page.locator("nav").last().locator('a, [role="link"]').filter({ hasText: /Add/i }).first();
   await expect(addLink).toBeVisible();
   const navBox = await addLink.evaluate((el) => el.closest("nav").getBoundingClientRect());
   expect(navBox.width).toBeLessThan(390 - 1);

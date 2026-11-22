@@ -19,7 +19,7 @@ export default function BottomNav() {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto w-[calc(100%-1.5rem)] rounded-2xl md:hidden">
       <div className="glass border-b-0 rounded-t-2xl">
         <div className="mx-auto grid max-w-md grid-cols-5 gap-1 px-1 pb-[max(6px,env(safe-area-inset-bottom))] pt-1.5">
           {items.map((item, i) => {

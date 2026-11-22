@@ -15,7 +15,7 @@ export default function PageShell({ children }) {
     <div className="min-h-screen text-white">
       <Background />
       <Navbar />
-      <div className="relative z-10">{children}</div>
+      <div className="relative z-10 pb-[80px] md:pb-0">{children}</div>
       <div className="relative z-10">
         <Footer />
       </div>
