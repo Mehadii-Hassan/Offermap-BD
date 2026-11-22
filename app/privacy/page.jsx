@@ -8,6 +8,10 @@ export const metadata = pageMeta({
   path: "/privacy",
 });
 
+const ADS_ENABLED =
+  process.env.NEXT_PUBLIC_ADS_ENABLED === "true" &&
+  Boolean(process.env.NEXT_PUBLIC_ADSENSE_CLIENT);
+
 const sections = [
   {
     title: "1. Information we collect",
@@ -29,10 +33,14 @@ const sections = [
     title: "4.1 Anonymous visit statistics",
     body: "We count anonymous page views to understand which offers are popular. This uses a random visitor ID stored in your browser and sends only the page you visited, the page you came from, and an approximate country/city derived from your connection. It does not identify you, and we never combine it with your location or any saved content.",
   },
-  {
-    title: "5. Advertising",
-    body: "We plan to display advertising to keep OfferMap BD free. Where ads appear, the ad networks follow their own privacy policies. This policy will be updated to clearly describe ad partners if and when they are added.",
-  },
+  ...(ADS_ENABLED
+    ? [
+        {
+          title: "5. Advertising",
+          body: "We display advertising to keep OfferMap BD free. Ads may set and read cookies to personalise and measure ads. Ad networks follow their own privacy policies. You can control cookies through your browser settings. This policy will be updated to clearly describe ad partners if and when they are added.",
+        },
+      ]
+    : []),
   {
     title: "6. Children's privacy",
     body: "OfferMap BD is not directed at children under 13. We do not knowingly collect personal information from children.",

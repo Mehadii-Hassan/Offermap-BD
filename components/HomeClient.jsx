@@ -11,8 +11,8 @@ import MapView from "./MapView";
 import Confetti from "./Confetti";
 import { GridSkeleton } from "./Skeletons";
 import EmptyState from "./EmptyState";
-import AdSlot from "./AdSlot";
 import CategoryRail from "./CategoryRail";
+import HouseCard from "./HouseCard";
 import { useApp } from "@/lib/app-context";
 import {
   getAllOffers,
@@ -786,8 +786,6 @@ const ending = useMemo(
                   )}
                 </div>
 
-                <AdSlot variant="banner" className="mb-10 mt-2" />
-
                 {/* Hot right now */}
                 <div className="mb-10">
                   <SectionHeading
@@ -1029,14 +1027,16 @@ const ending = useMemo(
                     <>
                       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                         {visibleList.map((o, i) => (
-                          <OfferCard
-                            key={o.id}
-                            offer={o}
-                            index={i}
-                            distanceKm={o.distanceKm}
-                            userCoords={userCoords}
-                            onFirstSave={handleFirstSave}
-                          />
+                          <>
+                            <OfferCard
+                              offer={o}
+                              index={i}
+                              distanceKm={o.distanceKm}
+                              userCoords={userCoords}
+                              onFirstSave={handleFirstSave}
+                            />
+                            {i === 5 && <HouseCard />}
+                          </>
                         ))}
                       </div>
                       {visibleCount < filteredList.length && (
