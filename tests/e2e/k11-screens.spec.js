@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { promises as fsPromises } from "fs";
 
 const BASE = "http://localhost:3100";
 const SHOTS = "docs/screens";
@@ -14,7 +15,10 @@ async function shoot(page, name, light, width, height, fullPage) {
   }, light);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(900);
-  await page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: !!fullPage });
+  const buf = await page.screenshot({ fullPage: !!fullPage });
+  const out = `${SHOTS}/${name}.png`;
+  await fsPromises.unlink(out).catch(() => {});
+  await fsPromises.writeFile(out, buf);
 }
 
 test("K11: screenshots saved for home, filtered, map, detail, add, saved", async ({ page }) => {
