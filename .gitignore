@@ -37,6 +37,7 @@ blob-report/
 build.log
 e2e.log
 schema.log
+logs/
 
 # runtime outlet-brand cache
 .outlet-brands.json
