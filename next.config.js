@@ -4,7 +4,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/:all",
+        source: "/:path*",
         headers: [
           {
             key: "X-Content-Type-Options",
