@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { hasAdminEnv } from "@/lib/supabaseAdmin";
 import { adminIncrementVote } from "@/lib/supabaseAdmin";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(req) {
   if (!hasAdminEnv()) {
     return NextResponse.json({ error: "Not configured" }, { status: 500 });
+  }
+
+  const ip = getClientIp(req);
+  if (!rateLimit(`vote:${ip}`, 30, 60 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Too many votes, try later.", message: "অনেক ভোট, পরে চেষ্টা করুন।" },
+      { status: 429 }
+    );
   }
 
   let body;
@@ -28,7 +37,7 @@ export async function POST(req) {
     await adminIncrementVote(id, column);
   } catch (e) {
     return NextResponse.json(
-      { error: "Could not save vote", detail: e.message },
+      { error: "Could not save vote, try again.", message: "ভোট সংরক্ষণ করা যায়নি, পরে চেষ্টা করুন।" },
       { status: 500 }
     );
   }

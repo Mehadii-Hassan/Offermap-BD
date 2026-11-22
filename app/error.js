@@ -8,7 +8,7 @@ export default function Error({ reset }) {
       <div className="text-center">
         <h1 className="text-5xl font-black">Something went wrong</h1>
         <p className="mt-3 max-w-md text-white/60">
-          An unexpected error occurred while loading this page. Please try again.
+          Something unexpected happened while loading this page. Please try again.
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <button

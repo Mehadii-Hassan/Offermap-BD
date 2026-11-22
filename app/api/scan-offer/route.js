@@ -22,11 +22,25 @@ function jsonFromGemini(text) {
 
 export async function POST(req) {
   if (!process.env.GEMINI_API_KEY) {
-    return NextResponse.json({ error: "AI not configured" }, { status: 500 });
+    return NextResponse.json(
+      { error: "AI isn't configured right now.", message: "AI এখন কনফিগার করা নেই। পরে চেষ্টা করুন।" },
+      { status: 503 }
+    );
   }
   const ip = getClientIp(req);
+  // Per-IP limit: 6 scans per hour.
   if (!rateLimit(`scan:${ip}`, 6, 60 * 60 * 1000)) {
-    return NextResponse.json({ error: "Too many requests, try later." }, { status: 429 });
+    return NextResponse.json(
+      { error: "Too many scan requests, try later.", message: "অনেক স্ক্যান করার অনুরোধ, পরে চেষ্টা করুন।" },
+      { status: 429 }
+    );
+  }
+  // Global daily cap: 200 scans across all IPs.
+  if (!rateLimit("scan:global", 200, 24 * 60 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Daily scan limit reached, try tomorrow.", message: "আজকের স্ক্যান সীমা শেষ, আগামীকাল চেষ্টা করুন।" },
+      { status: 429 }
+    );
   }
 
   let form;
@@ -83,9 +97,8 @@ Respond with valid JSON only.`;
     }
   );
   if (!res.ok) {
-    const body = await res.text();
     return NextResponse.json(
-      { error: "AI call failed", detail: body.slice(0, 200) },
+      { error: "AI call failed, try again.", message: "AI কল ব্যর্থ, পরে চেষ্টা করুন।" },
       { status: 502 }
     );
   }

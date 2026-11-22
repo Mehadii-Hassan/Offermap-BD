@@ -32,6 +32,10 @@ export async function POST(req) {
   }
 
   const ua = req.headers.get("user-agent") || "";
+  // Ignore QA traffic so it does not pollute analytics.
+  if (ua.endsWith(" OfferMapQA")) {
+    return NextResponse.json({ ok: true, ignored: "qa" });
+  }
   if (BOT_RE.test(ua)) {
     return NextResponse.json({ ok: true, ignored: "bot" });
   }
@@ -85,7 +89,7 @@ export async function POST(req) {
   });
   if (insErr) {
     return NextResponse.json(
-      { error: "Could not save visit", detail: insErr.message },
+      { error: "Could not save visit, try again.", message: "ভিজিট সংরক্ষণ করা যায়নি, পরে চেষ্টা করুন।" },
       { status: 500 }
     );
   }
