@@ -841,6 +841,7 @@ export default function AddOfferClient() {
           </p>
         )}
 
+        {/* Submit always present; disabled until every required field is valid */}
         <div className="mt-6 flex items-center justify-between gap-3">
           {step !== "photo" && (
             <button
@@ -852,23 +853,7 @@ export default function AddOfferClient() {
               {t.stepPrev}
             </button>
           )}
-          {step === "review" ? (
-            <button
-              type="submit"
-              disabled={submitting || !isStepValid()}
-              className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-tr from-pink-600 to-purple-700 px-6 py-3 text-lg font-semibold text-white hover:opacity-90 transition ${
-                submitting || !isStepValid() ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> {t.submitting}
-                </>
-              ) : (
-                t.submitOffer
-              )}
-            </button>
-          ) : (
+          {step !== "review" && (
             <button
               type="button"
               onClick={goNext}
@@ -880,6 +865,21 @@ export default function AddOfferClient() {
               {t.stepNext}
             </button>
           )}
+          <button
+            type="submit"
+            disabled={submitting}
+            className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-tr from-pink-600 to-purple-700 px-6 py-3 text-lg font-semibold text-white hover:opacity-90 transition ${
+              submitting ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> {t.submitting}
+              </>
+            ) : (
+              t.submitOffer
+            )}
+          </button>
         </div>
       </form>
     </div>
