@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import PageShell from "@/components/PageShell";
 import DistrictOffersView, { findDistrict } from "@/components/DistrictOffers";
 import { getAllOffers } from "@/lib/offers";
-import { pageMeta } from "@/lib/meta";
+import { pageMeta, APP_BASE } from "@/lib/meta";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +17,14 @@ export async function generateMetadata({ params }) {
   } catch (e) { /* keep 0 */ }
   const title = `offers in ${d.name}`;
   const description = `Offers and discounts in ${d.name}, ${d.division}, Bangladesh.`;
+  const ogUrl = new URL("/og/image", APP_BASE);
+  ogUrl.searchParams.set("title", title);
+  ogUrl.searchParams.set("area", d.name);
   return pageMeta({
     title,
     description,
     path: `/offers/${district}`,
+    image: ogUrl.toString(),
     robots: count >= 3 ? { index: true, follow: true } : { index: false, follow: true },
   });
 }

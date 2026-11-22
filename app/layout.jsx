@@ -57,7 +57,7 @@ export const metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icon.svg",
-    apple: "/icon.svg",
+    apple: "/icons/icon-180.png",
   },
   verification: gsc ? { google: gsc } : undefined,
 };

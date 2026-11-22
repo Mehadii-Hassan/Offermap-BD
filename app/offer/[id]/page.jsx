@@ -17,11 +17,16 @@ export async function generateMetadata({ params }) {
   if (!offer) return pageMeta({ title: "Offer Not Found", description: "This offer could not be found." });
   const title = `${offer.discountText} at ${offer.shopName} - ${offer.area}, ${offer.district || ""}`;
   const description = `${offer.discountText} at ${offer.shopName}, ${offer.area}, ${offer.district || "Bangladesh"}. ${offer.description}`.slice(0, 160);
+  const ogUrl = new URL("/og/image", APP_BASE);
+  ogUrl.searchParams.set("title", title);
+  if (offer.shopName) ogUrl.searchParams.set("shop", offer.shopName);
+  if (offer.area) ogUrl.searchParams.set("area", offer.area);
+  if (offer.discountText) ogUrl.searchParams.set("discount", offer.discountText);
   return pageMeta({
     title,
     description,
     path: `/offer/${offer.id}`,
-    image: offer.image,
+    image: ogUrl.toString(),
   });
 }
 
