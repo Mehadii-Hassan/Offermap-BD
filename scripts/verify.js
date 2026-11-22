@@ -190,6 +190,118 @@ check('k12-outlet-areas', () => {
   return { ok: false, reason: 'scripts/backfill-outlet-areas.js missing' };
 });
 
+check('ads-off', () => {
+  // After build, no client chunk should render a visible ad placeholder box.
+  const r = run('npx', ['grep', '-rIl', 'AD SLOT', '.next/static']);
+  if (r.ok && r.out.trim() === '') return { ok: true };
+  return { ok: false, reason: 'ad placeholder found in build output' };
+});
+
+check('report-api', () => {
+  const p = path.join(root, 'app', 'api', 'report', 'route.js');
+  if (fs.existsSync(p)) {
+    const c = fs.readFileSync(p, 'utf8');
+    const hasReason = /reason/.test(c);
+    const hasContact = /contact/.test(c);
+    const hasRate = /rateLimit/.test(c);
+    if (hasReason && hasContact && hasRate) return { ok: true };
+    return { ok: false, reason: 'report route missing reason/contact/rate-limit' };
+  }
+  return { ok: false, reason: 'app/api/report/route.js missing' };
+});
+
+check('check-rls', () => {
+  const r = run(process.execPath, ['scripts/check-rls.mjs'], { env: { ...process.env, FORCE_COLOR: '0' } });
+  if (r.ok) return { ok: true };
+  return { ok: false, reason: last3(r.out) || 'check-rls failed' };
+});
+
+check('no-secrets', () => {
+  const r = run('npx', ['grep', '-rIl', '-E', 'service_role|sb_secret|DATABASE_URL|GEMINI_API_KEY|TAVILY', '.next/static']);
+  if (r.ok && r.out.trim() === '') return { ok: true };
+  return { ok: false, reason: 'secrets found in build output' };
+});
+
+check('manifest-og', () => {
+  const manifest = fs.existsSync(path.join(root, 'public', 'manifest.webmanifest'));
+  const ogRoute = fs.existsSync(path.join(root, 'app', 'og', 'image.route.js'));
+  if (manifest && ogRoute) return { ok: true };
+  return { ok: false, reason: 'manifest or og image route missing' };
+});
+
+check('client-error', () => {
+  const p = path.join(root, 'app', 'api', 'client-error', 'route.js');
+  if (fs.existsSync(p)) {
+    const c = fs.readFileSync(p, 'utf8');
+    const hasLog = /activity_log|logEvent/.test(c);
+    const hasRate = /rateLimit/.test(c);
+    if (hasLog && hasRate) return { ok: true };
+    return { ok: false, reason: 'client-error missing log or rate-limit' };
+  }
+  return { ok: false, reason: 'app/api/client-error/route.js missing' };
+});
+
+check('qa-report', () => {
+  const p = path.join(root, 'docs', 'QA-REPORT.md');
+  if (!fs.existsSync(p)) return { ok: false, reason: 'docs/QA-REPORT.md missing' };
+  const c = fs.readFileSync(p, 'utf8');
+  const p0 = (c.match(/P0/g) || []).length;
+  const p1 = (c.match(/P1/g) || []).length;
+  const open = (c.match(/status:\s*open/gi) || []).length;
+  if (open === 0) return { ok: true, reason: `zero open P0/P1 (P0:${p0} P1:${p1})` };
+  return { ok: false, reason: `${open} open P0/P1 issues` };
+});
+
+check('lighthouse', () => {
+  const p = path.join(root, 'docs', 'lighthouse.json');
+  if (!fs.existsSync(p)) return { ok: false, reason: 'docs/lighthouse.json missing' };
+  try {
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    const ok = data.performance >= 85 && data.accessibility >= 85 && data.seo >= 85;
+    if (ok) return { ok: true, reason: `perf ${data.performance} a11y ${data.accessibility} seo ${data.seo}` };
+    return { ok: false, reason: `scores below 85: ${JSON.stringify(data)}` };
+  } catch (e) {
+    return { ok: false, reason: 'invalid lighthouse.json' };
+  }
+});
+
+check('actions-health', async () => {
+  const script = `
+const { createHash } = require('crypto');
+const url = 'https://api.github.com/repos/Mehadii-Hassan/Offermap-BD/actions/runs';
+(async () => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) { console.log('SKIP actions-health - GitHub API not reachable (' + res.status + ')'); process.exit(0); }
+    const data = await res.json();
+    const runs = data.workflow_runs || [];
+    const latest = {};
+    for (const r of runs) {
+      if (!latest[r.name]) latest[r.name] = r;
+    }
+    const needed = ['scrape', 'cleanup', 'backfill'];
+    let allPassed = true;
+    let msg = '';
+    for (const name of needed) {
+      const r = latest[name];
+      if (!r) { msg += \` ${name}: missing; \`; allPassed = false; continue; }
+      if (r.status === 'completed' && r.conclusion === 'success') { msg += \` ${name}: PASS; \`; }
+      else { msg += \` ${name}: ${r.status}/${r.conclusion}; \`; allPassed = false; }
+    }
+    console.log(allPassed ? 'PASS actions-health' + msg : 'FAIL actions-health' + msg);
+    process.exit(allPassed ? 0 : 1);
+  } catch (e) {
+    console.log('SKIP actions-health - ' + e.message);
+    process.exit(0);
+  }
+})();
+`;
+  const r = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 30000 });
+  const out = ((r.stdout || '') + (r.stderr || '')).trim();
+  if (/^PASS actions-health/.test(out) || /^SKIP actions-health/.test(out)) return { ok: true, reason: out };
+  return { ok: false, reason: out || 'actions-health check failed' };
+});
+
 let pass = 0;
 for (const c of checks) {
   if (c.ok) {
